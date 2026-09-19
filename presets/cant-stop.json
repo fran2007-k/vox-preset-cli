@@ -1,0 +1,50 @@
+{
+  "programName": "Can't Stop",
+  "amplifier": {
+    "model": "BOUTIQUE_CL",
+    "gain": 4.5,
+    "treble": 6.5,
+    "middle": 5.5,
+    "bass": 5.0,
+    "volume": 6.5,
+    "presence": 5.5,
+    "resonance": 5.5,
+    "noiseReductionSensitivity": 3.0,
+    "brightCap": true,
+    "lowCut": false,
+    "midBoost": false,
+    "tubeBias": "OFF",
+    "ampClass": "A"
+  },
+  "pedal1": {
+    "type": "COMP",
+    "enabled": true,
+    "params": {
+      "sens": 6.0,
+      "level": 6.5,
+      "attack": 4.5,
+      "voice": "TWO"
+    }
+  },
+  "pedal2": {
+    "type": "ORG_PHASER_1",
+    "enabled": true,
+    "params": {
+      "speedHz": 1.8,
+      "resonance": 6.5,
+      "manual": 6.0,
+      "depth": 7.0
+    }
+  },
+  "reverb": {
+    "type": "ROOM",
+    "enabled": true,
+    "params": {
+      "mix": 2.0,
+      "time": 2.5,
+      "preDelayMs": 0,
+      "lowDamp": 3.6,
+      "highDamp": 2.5
+    }
+  }
+}

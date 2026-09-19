@@ -174,6 +174,30 @@ back afterward via this specific command that's affected. See the comment
 above `buildRequestCurrentProgramMessage()` in `lib/protocol.js` for the
 full isolated-test writeup.
 
+**Known limitation, confirmed by testing every value from 0.1-20.0 against
+real hardware:** Phaser "Depth" (`BLK_PHASER` / `ORG_PHASER_1` /
+`ORG_PHASER_2`, `pedal2.params.depth`) never accepts a live update to a
+nonzero value -- the amp simply never ACKs it, at any value, regardless of
+encoding. `0.0` (the default) is the only value that works live. `play`
+reports this per-field rather than failing the whole sequence (see below);
+`write` is unaffected, since it persists the whole program as one blob
+rather than one message per field.
+
+Separately, and **not fully resolved**: reading Phaser's "Manual" position
+back after a successful `play` (i.e. the CLI reported it as ACKed) showed a
+value that didn't match what was sent. This might be the same class of
+readback-only quirk as Chorus's Speed above, or a genuine gap in the
+Phaser `liveDial` mapping in `lib/protocol.js` -- I wasn't able to
+distinguish the two from bytes alone. If a Phaser preset's modulation
+sounds off, this is the first thing to suspect; `write`ing the same preset
+to a slot and comparing bypasses `play` entirely and is a good way to
+isolate whether it's a `play`-specific issue.
+
+`play` (both the CLI and the GUI) sends every message in a preset even if
+an earlier one fails, and reports exactly which fields (by name, e.g.
+`pedal2.params.depth`) the amp didn't accept, rather than aborting the
+whole sequence on the first failure.
+
 ## Generating a preset JSON
 
 Two ways to get one:

@@ -67,14 +67,24 @@ async function playPreset(jsonPath) {
   const messages = protocol.buildLiveApplyMessages(preset);
 
   const ports = openAmpPorts();
+  const failed = [];
   try {
     console.log(`Playing "${preset.programName || '(unnamed)'}" live (${messages.length} messages, nothing saved)...`);
-    for (const message of messages) {
-      await sendAndAwaitAck(ports, message, protocol.isAck);
+    for (const { label, message } of messages) {
+      try {
+        await sendAndAwaitAck(ports, message, protocol.isAck, 800);
+      } catch (err) {
+        failed.push(label);
+      }
     }
-    console.log('Done -- the amp should sound like it now. Nothing was written to any slot.');
   } finally {
     ports.close();
+  }
+
+  if (failed.length > 0) {
+    console.log(`Done, with ${failed.length} field(s) the amp didn't accept live (known hardware limitation, not necessarily a bug -- see README): ${failed.join(', ')}`);
+  } else {
+    console.log('Done -- the amp should sound like it now. Nothing was written to any slot.');
   }
 }
 

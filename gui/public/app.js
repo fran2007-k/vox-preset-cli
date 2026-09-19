@@ -94,7 +94,11 @@ async function onPlayClick(event) {
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error);
-    log(`Done: the amp should now sound like "${data.result.programName}" (${data.result.messageCount} live messages, nothing written).`, 'ok');
+    if (data.result.failed && data.result.failed.length > 0) {
+      log(`Done, with ${data.result.failed.length} field(s) the amp didn't accept live (known hardware limitation): ${data.result.failed.join(', ')}`, 'ok');
+    } else {
+      log(`Done: the amp should now sound like "${data.result.programName}" (${data.result.messageCount} live messages, nothing written).`, 'ok');
+    }
   } catch (err) {
     log(`Failed: ${err.message}`, 'err');
   } finally {

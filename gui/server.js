@@ -104,15 +104,20 @@ async function doPlay(fileName) {
   const messages = protocol.buildLiveApplyMessages(preset);
 
   const ports = openAmpPorts();
+  const failed = [];
   try {
-    for (const message of messages) {
-      await sendAndAwaitAck(ports, message, protocol.isAck);
+    for (const { label, message } of messages) {
+      try {
+        await sendAndAwaitAck(ports, message, protocol.isAck, 800);
+      } catch (err) {
+        failed.push(label);
+      }
     }
   } finally {
     ports.close();
   }
 
-  return { programName: preset.programName || '(unnamed)', messageCount: messages.length };
+  return { programName: preset.programName || '(unnamed)', messageCount: messages.length, failed };
 }
 
 async function doDump(slot, saveAsFileName) {
