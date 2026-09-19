@@ -16,19 +16,27 @@ Usage:
   node apply-preset.js list-ports
   node apply-preset.js write <preset.json> [--slot A1..B4] [--dry-run]
   node apply-preset.js read <A1..B4>
+  node apply-preset.js dump <A1..B4> [--out <file.json>]
 
 "write" persists the preset directly to the amp's program memory in one
 shot -- no live-editing required. The JSON file's own "targetSlot" field is
 used if --slot is not given.
 
 "read" fetches whatever is actually stored in a slot right now and prints
-it as JSON, decoded straight from the amp's own bytes (not from any app's
-cached state) -- useful to double check what really got written.
+a raw decode of it (dial-by-dial) -- useful to double check what really
+got written, at the byte level.
+
+"dump" is the easier way to *generate* a preset JSON: it fetches a slot and
+prints (or saves) it already shaped as a preset file ready for "write" --
+so you can pull any sound already on the amp and use it as a starting
+point instead of writing JSON from scratch. See README.md for the full
+parameter reference if you'd rather build one by hand.
 
 Examples:
   node apply-preset.js write presets/money-for-nothing.json
   node apply-preset.js write presets/money-for-nothing.json --slot A3 --dry-run
   node apply-preset.js read A2
+  node apply-preset.js dump A1 --out presets/funky.json
 `);
 }
 
@@ -83,27 +91,55 @@ async function writePreset(jsonPath, slotOverride, dryRun) {
   }
 }
 
+async function fetchProgramBytes(ports, slot) {
+  const requestMessage = protocol.buildRequestUserProgramMessage(slot);
+  const response = await sendAndAwaitResponse(ports, requestMessage);
+
+  // response: F0 42 30 00 01 34 4c 00 <slot> 00 <70 program bytes> F7
+  const payload = response.slice(2, -1);
+  const expectedPrefix = [0x30, 0x00, 0x01, 0x34, 0x4c, 0x00];
+  const prefixMatches = expectedPrefix.every((b, i) => payload[i] === b);
+  if (!prefixMatches) {
+    throw new Error(`Unexpected response from amp: ${Buffer.from(response).toString('hex')}`);
+  }
+
+  const programBytes = Buffer.from(payload.slice(8));
+  if (programBytes.length !== 0x46) {
+    throw new Error(`Expected a 70-byte program, got ${programBytes.length} bytes.`);
+  }
+  return programBytes;
+}
+
 async function readSlot(slot) {
   const ports = openAmpPorts();
   try {
-    const requestMessage = protocol.buildRequestUserProgramMessage(slot);
     console.log(`Requesting slot ${slot} from the amp...`);
-    const response = await sendAndAwaitResponse(ports, requestMessage);
-
-    // response: F0 42 30 00 01 34 4c 00 <slot> 00 <70 program bytes> F7
-    const payload = response.slice(2, -1);
-    const expectedPrefix = [0x30, 0x00, 0x01, 0x34, 0x4c, 0x00];
-    const prefixMatches = expectedPrefix.every((b, i) => payload[i] === b);
-    if (!prefixMatches) {
-      throw new Error(`Unexpected response from amp: ${Buffer.from(response).toString('hex')}`);
-    }
-
-    const programBytes = Buffer.from(payload.slice(8));
-    if (programBytes.length !== 0x46) {
-      throw new Error(`Expected a 70-byte program, got ${programBytes.length} bytes.`);
-    }
-
+    const programBytes = await fetchProgramBytes(ports, slot);
     console.log(JSON.stringify(protocol.decodeProgram(programBytes), null, 2));
+  } finally {
+    ports.close();
+  }
+}
+
+async function dumpSlot(slot, outFile) {
+  const ports = openAmpPorts();
+  try {
+    console.log(`Requesting slot ${slot} from the amp...`);
+    const programBytes = await fetchProgramBytes(ports, slot);
+    const preset = protocol.decodeProgramToPresetInput(programBytes, slot);
+    const json = JSON.stringify(preset, null, 2);
+
+    if (outFile) {
+      fs.writeFileSync(path.resolve(outFile), json + '\n');
+      console.log(`Saved to ${outFile}. Edit it and "write" it back with:`);
+      console.log(`  node apply-preset.js write ${outFile}`);
+    } else {
+      console.log(json);
+    }
+
+    if (preset.pedal2._warning) {
+      console.warn('\nNote: a field-collision warning was attached to this preset -- see the "_warning" key above.');
+    }
   } finally {
     ports.close();
   }
@@ -145,6 +181,21 @@ async function main() {
       return;
     }
     await readSlot(positionals[0]);
+    return;
+  }
+
+  if (command === 'dump') {
+    const { positionals, values } = parseArgs({
+      args: rest,
+      options: { out: { type: 'string' } },
+      allowPositionals: true,
+    });
+    if (positionals.length !== 1) {
+      console.error('Usage: node apply-preset.js dump <A1..B4> [--out <file.json>]');
+      process.exitCode = 1;
+      return;
+    }
+    await dumpSlot(positionals[0], values.out);
     return;
   }
 
