@@ -15,6 +15,17 @@ build tooling with it, only the wire protocol. If you have that repo cloned
 locally too (e.g. as `../vox-amp-librarian`), its docs are worth cross
 referencing, but this tool doesn't depend on it being present.
 
+## Goal
+
+To easily use, share, and generate presets for the VOX VT-series amps
+(VT20X/40X/100X), and apply them to the amp effortlessly, bypassing VOX's
+own unmaintained ToneRoom software.
+
+Not affiliated with, endorsed by, or supported by VOX, KORG, or any
+related entity. This is an independent, unofficial tool built by
+reverse-engineering the amp's own USB-MIDI protocol for interoperability,
+without copying any VOX software or code.
+
 ## Acknowledgments
 
 None of this exists without [Tobias Marstaller](https://github.com/tmarsteel)'s
