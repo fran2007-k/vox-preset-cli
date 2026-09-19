@@ -19,16 +19,14 @@ referencing, but this tool doesn't depend on it being present.
 
 None of this exists without [Tobias Marstaller](https://github.com/tmarsteel)'s
 work on [vox-amp-librarian](https://github.com/tmarsteel/vox-amp-librarian).
-Reverse-engineering a closed USB-MIDI protocol from scratch -- sniffing real
+Reverse-engineering a closed USB-MIDI protocol from scratch, sniffing real
 traffic with Wireshark, working out byte layouts and quirky encodings by
 hand, and then writing them up clearly enough that someone else could pick
-them up cold -- is real, patient work, and it's the only reason anything in
+them up cold, is real, patient work, and it's the only reason anything in
 `lib/protocol.js` was possible. I didn't rediscover any of that protocol
-knowledge myself; I built a different tool on top of it. So: genuinely,
-thank you, Tobias -- for doing the hard part, and for doing it as MIT-licensed
-open source so it could be built on at all. If you ever read this: I hope
-the bug report on the Chorus/Pedal-2 collision is useful, and I mean every
-word of this section.
+knowledge myself; I built a different tool on top of it. So, genuinely,
+thank you, Tobias, for doing the hard part, and for doing it as MIT-licensed
+open source so it could be built on at all.
 
 ## AI involvement (honest disclosure)
 
