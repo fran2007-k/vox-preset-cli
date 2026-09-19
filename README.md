@@ -336,3 +336,14 @@ Pedal 2's own depth/manual-ish knobs will show Chorus's numbers instead of
 whatever Pedal 2 itself was configured with. Harmless if Pedal 2 is
 disabled (as in the example preset); worth knowing if you rely on Pedal 2
 being simultaneously active alongside Chorus.
+
+## License
+
+MIT, plus the [Commons Clause](https://commonsclause.com/). Plain-language
+summary (the [LICENSE](LICENSE) file is what actually governs): free to
+use, modify, and share, including inside your own commercial projects --
+the one thing you can't do is sell this software itself, or sell a
+product/service whose value comes mainly from it (e.g. repackaging it as a
+paid tool). This isn't an OSI-approved "open source" license because of
+that restriction, but the source is fully open and everything else about
+MIT still applies.
