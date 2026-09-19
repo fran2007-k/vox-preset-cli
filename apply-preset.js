@@ -6,7 +6,7 @@ const path = require('path');
 const { parseArgs } = require('util');
 
 const protocol = require('./lib/protocol');
-const { openAmpPorts, sendAndAwaitResponse } = require('./lib/midi');
+const { openAmpPorts, sendAndAwaitResponse, sendAndAwaitAck } = require('./lib/midi');
 
 function printUsage() {
   console.log(`
@@ -14,17 +14,28 @@ vox-preset -- write/read VOX VT20X/40X/100X amp presets over MIDI
 
 Usage:
   node apply-preset.js list-ports
+  node apply-preset.js play <preset.json>
   node apply-preset.js write <preset.json> [--slot A1..B4] [--dry-run]
-  node apply-preset.js read <A1..B4>
+  node apply-preset.js read [A1..B4]
   node apply-preset.js dump <A1..B4> [--out <file.json>]
+
+"play" makes the amp sound like the preset RIGHT NOW, on whatever slot is
+currently active -- the same as turning its physical knobs, just all at
+once. Nothing is written to any slot; power-cycling the amp or switching
+slots reverts it. This is the one to reach for if you just want to hear a
+preset without committing it anywhere -- your "current rig" for the
+session.
 
 "write" persists the preset directly to the amp's program memory in one
 shot -- no live-editing required. The JSON file's own "targetSlot" field is
 used if --slot is not given.
 
-"read" fetches whatever is actually stored in a slot right now and prints
-a raw decode of it (dial-by-dial) -- useful to double check what really
-got written, at the byte level.
+"read <slot>" fetches whatever is actually stored in that slot right now
+and prints a raw decode of it (dial-by-dial) -- useful to double check what
+really got written, at the byte level. "read" with no slot instead reads
+the amp's CURRENT LIVE state (what it actually sounds like right now,
+including anything applied with "play") -- the read-side counterpart to
+"play".
 
 "dump" is the easier way to *generate* a preset JSON: it fetches a slot and
 prints (or saves) it already shaped as a preset file ready for "write" --
@@ -33,6 +44,7 @@ point instead of writing JSON from scratch. See README.md for the full
 parameter reference if you'd rather build one by hand.
 
 Examples:
+  node apply-preset.js play presets/money-for-nothing.json
   node apply-preset.js write presets/money-for-nothing.json
   node apply-preset.js write presets/money-for-nothing.json --slot A3 --dry-run
   node apply-preset.js read A2
@@ -48,6 +60,22 @@ function listPorts() {
   for (let i = 0; i < input.getPortCount(); i++) console.log(`  [${i}] ${input.getPortName(i)}`);
   console.log('MIDI output ports:');
   for (let i = 0; i < output.getPortCount(); i++) console.log(`  [${i}] ${output.getPortName(i)}`);
+}
+
+async function playPreset(jsonPath) {
+  const preset = JSON.parse(fs.readFileSync(path.resolve(jsonPath), 'utf8'));
+  const messages = protocol.buildLiveApplyMessages(preset);
+
+  const ports = openAmpPorts();
+  try {
+    console.log(`Playing "${preset.programName || '(unnamed)'}" live (${messages.length} messages, nothing saved)...`);
+    for (const message of messages) {
+      await sendAndAwaitAck(ports, message, protocol.isAck);
+    }
+    console.log('Done -- the amp should sound like it now. Nothing was written to any slot.');
+  } finally {
+    ports.close();
+  }
 }
 
 async function writePreset(jsonPath, slotOverride, dryRun) {
@@ -74,15 +102,8 @@ async function writePreset(jsonPath, slotOverride, dryRun) {
   const ports = openAmpPorts();
   try {
     console.log(`Writing "${preset.programName || '(unnamed)'}" to slot ${slot}...`);
-    const writeAck = await sendAndAwaitResponse(ports, writeMessage);
-    if (!protocol.isAck(writeAck)) {
-      throw new Error(`Amp did not acknowledge the write. Got: ${Buffer.from(writeAck).toString('hex')}`);
-    }
-
-    const persistAck = await sendAndAwaitResponse(ports, persistMessage);
-    if (!protocol.isAck(persistAck)) {
-      throw new Error(`Amp did not acknowledge the persist. Got: ${Buffer.from(persistAck).toString('hex')}`);
-    }
+    await sendAndAwaitAck(ports, writeMessage, protocol.isAck);
+    await sendAndAwaitAck(ports, persistMessage, protocol.isAck);
 
     console.log(`Done. Slot ${slot} now holds "${preset.programName || '(unnamed)'}".`);
     console.log(`Verify any time with: node apply-preset.js read ${slot}`);
@@ -108,6 +129,28 @@ async function fetchProgramBytes(ports, slot) {
     throw new Error(`Expected a 70-byte program, got ${programBytes.length} bytes.`);
   }
   return programBytes;
+}
+
+async function readCurrent() {
+  const ports = openAmpPorts();
+  try {
+    console.log('Requesting the amp\'s current live state (not a stored slot)...');
+    const requestMessage = protocol.buildRequestCurrentProgramMessage();
+    const response = await sendAndAwaitResponse(ports, requestMessage);
+    const payload = response.slice(2, -1);
+    const expectedPrefix = [0x30, 0x00, 0x01, 0x34, 0x40, 0x00];
+    const prefixMatches = expectedPrefix.every((b, i) => payload[i] === b);
+    if (!prefixMatches) {
+      throw new Error(`Unexpected response from amp: ${Buffer.from(response).toString('hex')}`);
+    }
+    const programBytes = Buffer.from(payload.slice(6));
+    if (programBytes.length !== 0x46) {
+      throw new Error(`Expected a 70-byte program, got ${programBytes.length} bytes.`);
+    }
+    console.log(JSON.stringify(protocol.decodeProgram(programBytes), null, 2));
+  } finally {
+    ports.close();
+  }
 }
 
 async function readSlot(slot) {
@@ -158,6 +201,17 @@ async function main() {
     return;
   }
 
+  if (command === 'play') {
+    const { positionals } = parseArgs({ args: rest, allowPositionals: true });
+    if (positionals.length !== 1) {
+      console.error('Usage: node apply-preset.js play <preset.json>');
+      process.exitCode = 1;
+      return;
+    }
+    await playPreset(positionals[0]);
+    return;
+  }
+
   if (command === 'write') {
     const { positionals, values } = parseArgs({
       args: rest,
@@ -175,8 +229,12 @@ async function main() {
 
   if (command === 'read') {
     const { positionals } = parseArgs({ args: rest, allowPositionals: true });
+    if (positionals.length === 0) {
+      await readCurrent();
+      return;
+    }
     if (positionals.length !== 1) {
-      console.error('Usage: node apply-preset.js read <A1..B4>');
+      console.error('Usage: node apply-preset.js read [A1..B4]');
       process.exitCode = 1;
       return;
     }

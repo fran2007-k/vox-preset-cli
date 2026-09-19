@@ -3,6 +3,7 @@ const SLOTS = ['A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'B3', 'B4'];
 const statusDot = document.getElementById('status-dot');
 const statusText = document.getElementById('status-text');
 const presetsList = document.getElementById('presets-list');
+const rigList = document.getElementById('rig-list');
 const logEl = document.getElementById('log');
 
 function log(message, kind) {
@@ -39,9 +40,70 @@ function slotSelectHtml(idPrefix, preferredSlot) {
 
 async function loadPresets() {
   presetsList.innerHTML = '<p class="hint">Loading...</p>';
+  rigList.innerHTML = '<p class="hint">Loading...</p>';
   const res = await fetch('/api/presets');
   const presets = await res.json();
 
+  renderRigList(presets);
+  renderPresetsList(presets);
+}
+
+function renderRigList(presets) {
+  if (presets.length === 0) {
+    rigList.innerHTML = '<p class="hint">No preset files in presets/ yet.</p>';
+    return;
+  }
+
+  rigList.innerHTML = '';
+  for (const preset of presets) {
+    if (preset.error) continue;
+    const card = document.createElement('div');
+    card.className = 'card';
+    const meta = [preset.amplifier, preset.pedal1, preset.pedal2, preset.reverb].filter(Boolean).join(' · ');
+    card.innerHTML = `
+      <div class="card-row">
+        <div class="card-info">
+          <div class="card-name">${preset.programName}</div>
+          <div class="card-meta">${meta}</div>
+          <div class="card-file">${preset.file}</div>
+        </div>
+        <div class="card-actions">
+          <button class="play-button" data-file="${preset.file}">Play Now</button>
+        </div>
+      </div>`;
+    rigList.appendChild(card);
+  }
+
+  document.querySelectorAll('.play-button').forEach((btn) => {
+    btn.addEventListener('click', onPlayClick);
+  });
+}
+
+async function onPlayClick(event) {
+  const btn = event.target;
+  const file = btn.dataset.file;
+
+  btn.disabled = true;
+  btn.textContent = 'Playing...';
+  log(`Sending ${file} live to the amp's current rig (nothing will be saved)...`);
+  try {
+    const res = await fetch('/api/play', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file }),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    log(`Done: the amp should now sound like "${data.result.programName}" (${data.result.messageCount} live messages, nothing written).`, 'ok');
+  } catch (err) {
+    log(`Failed: ${err.message}`, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Play Now';
+  }
+}
+
+function renderPresetsList(presets) {
   if (presets.length === 0) {
     presetsList.innerHTML = '<p class="hint">No preset files in presets/ yet.</p>';
     return;

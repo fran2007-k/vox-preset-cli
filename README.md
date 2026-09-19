@@ -26,13 +26,24 @@ owner, who directed the work but did not hand-write the code. Concretely:
   logic (`lib/protocol.js`) from that Kotlin code into this JavaScript
   implementation.
 - Claude wrote all of the code in this repo (`lib/protocol.js`, `lib/midi.js`,
-  `apply-preset.js`, `gui/`, this README), across three sessions with the
+  `apply-preset.js`, `gui/`, this README), across four sessions with the
   same owner: the initial `write`/`read` implementation, then `dump` plus
   the parameter reference tables (added when the owner pointed out the first
   version left "how do I write the JSON in the first place"
-  underdocumented), then the `gui/` web launcher, scoped down from "full
+  underdocumented), then the `gui/` web launcher (scoped down from "full
   knob editor" to "preset launcher" specifically to avoid duplicating what
-  vox-amp-librarian already does well.
+  vox-amp-librarian already does well), then `play`/"Current Rig" (live
+  audition without writing to a slot, requested so writing to a slot didn't
+  have to be the only way to hear a preset).
+- Building `play` surfaced a real, narrow hardware quirk (Chorus Speed's
+  readback via "Request Current Program" specifically) that Claude found by
+  writing an isolated test and reading raw bytes back from the amp, not by
+  reasoning about the protocol doc alone -- documented above and in the
+  code rather than glossed over. The first version of the ACK-waiting logic
+  also had a real bug (assumed the amp's first reply to a live message was
+  always the ACK; it sometimes wasn't), caught the same way: real hardware
+  behaved differently than assumed, so the assumption got fixed, not
+  explained away.
 - Claude chose the MIDI library (`@julusian/midi`) and the overall CLI shape
   (`list-ports` / `write` / `read` / `dump`) after the owner picked
   "standalone CLI" over "a feature inside the web app" as the architecture.
@@ -87,10 +98,11 @@ automatically (real browser, real tab -- it uses macOS's `open` command).
 `npm run gui` just starts the server without opening anything, if you'd
 rather control that yourself.
 
-Either way it prints the URL (`http://localhost:4242` by default).
-It lists the JSON files in `presets/`, lets you pick a slot and click
-"Write to Amp" (with a confirm prompt before anything touches the amp), and
-has a "Dump" panel to pull a slot's sound off the amp as a new preset file.
+Either way it prints the URL (`http://localhost:4242` by default). It has
+three parts: **Current Rig** (Play Now -- hear a preset instantly, nothing
+saved, see "play" below), **Presets** (Preview -- inspect a preset with
+zero MIDI, or Write to Amp -- permanent, with a confirm prompt), and a
+**Dump** panel to pull a slot's sound off the amp as a new preset file.
 
 It's a preset launcher, not a knob editor -- there are no sliders/dials
 here. For live knob-by-knob tweaking, use vox-amp-librarian's browser app;
@@ -106,6 +118,10 @@ frontend beyond what's already in this repo.
 # see what MIDI ports are visible
 node apply-preset.js list-ports
 
+# make the amp sound like a preset RIGHT NOW -- nothing is written to any
+# slot, this is the "current rig" / audition command
+node apply-preset.js play presets/money-for-nothing.json
+
 # write a preset to the amp (uses "targetSlot" from the JSON, or pass --slot)
 node apply-preset.js write presets/money-for-nothing.json
 node apply-preset.js write presets/money-for-nothing.json --slot A3
@@ -117,6 +133,10 @@ node apply-preset.js write presets/money-for-nothing.json --dry-run
 # decoded from the amp's own bytes -- not from any app's cached state
 node apply-preset.js read A2
 
+# read the amp's CURRENT LIVE state instead (what it actually sounds like
+# right now, e.g. after "play") -- no slot argument
+node apply-preset.js read
+
 # pull a slot's sound off the amp as a ready-to-edit preset JSON
 node apply-preset.js dump A1
 node apply-preset.js dump A1 --out presets/funky.json
@@ -127,6 +147,32 @@ numbers (good for debugging/verifying), `dump` prints/saves the same shape
 `write` accepts (good for generating a preset without writing JSON from
 scratch -- tweak a couple of values in the dumped file and write it
 straight back, or to a different slot).
+
+## `play` vs `write`: audition vs commit
+
+- **`play`** sends live "dial turned" messages -- the same mechanism the
+  amp's own physical knobs use -- to whatever slot is currently active.
+  Nothing is written to persistent memory. Power-cycling the amp, or
+  switching to a different slot, reverts it. Use this to just *hear* a
+  preset without deciding yet whether to keep it anywhere. This is what
+  the GUI's "Current Rig" section does.
+- **`write`** persists the preset into a specific slot's memory via
+  "Write User Program" + "Persist User Program". This is permanent (until
+  overwritten) and survives power cycles.
+
+Both take the exact same preset JSON -- there's no format difference, just
+pick the command for what you're trying to do right now.
+
+One caveat found while building `play`, verified by isolated testing
+against real hardware (not just reasoning from the protocol doc): reading
+the amp's current live state back (`read` with no slot, or the GUI
+equivalent) misreports Chorus's Speed dial specifically -- every other
+field, including the structurally identical Pedal 2 speed dial, round-trips
+correctly. `play` still sets Chorus's Speed correctly (the amp appears to
+normalize the value internally for actual playback); it's only reading it
+back afterward via this specific command that's affected. See the comment
+above `buildRequestCurrentProgramMessage()` in `lib/protocol.js` for the
+full isolated-test writeup.
 
 ## Generating a preset JSON
 

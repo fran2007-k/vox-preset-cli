@@ -18,7 +18,7 @@ const fs = require('fs');
 const path = require('path');
 
 const protocol = require('../lib/protocol');
-const { openAmpPorts, sendAndAwaitResponse } = require('../lib/midi');
+const { openAmpPorts, sendAndAwaitResponse, sendAndAwaitAck } = require('../lib/midi');
 
 const PRESETS_DIR = path.join(__dirname, '..', 'presets');
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -82,15 +82,37 @@ async function doWrite(fileName, slotOverride) {
 
   const ports = openAmpPorts();
   try {
-    const writeAck = await sendAndAwaitResponse(ports, writeMessage);
-    if (!protocol.isAck(writeAck)) throw new Error('Amp did not acknowledge the write.');
-    const persistAck = await sendAndAwaitResponse(ports, persistMessage);
-    if (!protocol.isAck(persistAck)) throw new Error('Amp did not acknowledge the persist.');
+    await sendAndAwaitAck(ports, writeMessage, protocol.isAck);
+    await sendAndAwaitAck(ports, persistMessage, protocol.isAck);
   } finally {
     ports.close();
   }
 
   return { slot, programName: preset.programName || '(unnamed)' };
+}
+
+/**
+ * Makes the amp sound like the preset RIGHT NOW (whatever slot is
+ * currently active), via the same live "dial turned" messages the amp's
+ * own physical knobs send -- nothing is written to any slot. This is the
+ * "Current Rig" action: hear a preset without committing it anywhere.
+ */
+async function doPlay(fileName) {
+  const filePath = path.join(PRESETS_DIR, fileName);
+  if (!filePath.startsWith(PRESETS_DIR)) throw new Error('invalid file');
+  const preset = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  const messages = protocol.buildLiveApplyMessages(preset);
+
+  const ports = openAmpPorts();
+  try {
+    for (const message of messages) {
+      await sendAndAwaitAck(ports, message, protocol.isAck);
+    }
+  } finally {
+    ports.close();
+  }
+
+  return { programName: preset.programName || '(unnamed)', messageCount: messages.length };
 }
 
 async function doDump(slot, saveAsFileName) {
@@ -162,6 +184,13 @@ async function handleApi(req, res) {
     if (req.method === 'POST' && req.url === '/api/preview') {
       const body = await readJsonBody(req);
       const result = doPreview(body.file);
+      res.end(JSON.stringify({ ok: true, result }));
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/api/play') {
+      const body = await readJsonBody(req);
+      const result = await doPlay(body.file);
       res.end(JSON.stringify({ ok: true, result }));
       return;
     }
