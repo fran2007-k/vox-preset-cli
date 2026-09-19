@@ -1,0 +1,46 @@
+{
+  "programName": "MoneyForNothing",
+  "targetSlot": "A2",
+  "amplifier": {
+    "model": "DELUXE_CL_NORMAL",
+    "gain": 3.5,
+    "treble": 7.0,
+    "middle": 4.5,
+    "bass": 4.0,
+    "volume": 6.0,
+    "presence": 6.0,
+    "resonance": 6.0,
+    "noiseReductionSensitivity": 3.0,
+    "lowCut": false,
+    "midBoost": false,
+    "tubeBias": "OFF",
+    "ampClass": "A"
+  },
+  "pedal1": {
+    "type": "CHORUS",
+    "enabled": true,
+    "params": {
+      "speedHz": 0.8,
+      "depth": 6.5,
+      "manual": 5.7,
+      "mix": 6.0,
+      "lowCut": false,
+      "highCut": false
+    }
+  },
+  "pedal2": {
+    "type": "TREMOLO",
+    "enabled": false
+  },
+  "reverb": {
+    "type": "ROOM",
+    "enabled": true,
+    "params": {
+      "mix": 2.5,
+      "time": 3.5,
+      "preDelayMs": 0,
+      "lowDamp": 3.6,
+      "highDamp": 2.5
+    }
+  }
+}

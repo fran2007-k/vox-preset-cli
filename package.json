@@ -1,0 +1,19 @@
+{
+  "name": "vox-preset-cli",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone CLI to write VOX VT20X/40X/100X amp presets from JSON files over MIDI, without needing the browser app.",
+  "main": "apply-preset.js",
+  "bin": {
+    "vox-preset": "./apply-preset.js"
+  },
+  "scripts": {
+    "start": "node apply-preset.js"
+  },
+  "dependencies": {
+    "@julusian/midi": "^3.1.0"
+  },
+  "allowScripts": {
+    "@julusian/midi@3.8.1": true
+  }
+}
