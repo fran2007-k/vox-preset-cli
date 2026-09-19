@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")"
+
+PORT="${PORT:-4242}"
+
+echo "Starting VOX Preset Launcher on http://localhost:${PORT} ..."
+( sleep 1 && open "http://localhost:${PORT}" >/dev/null 2>&1 || true ) &
+
+exec node gui/server.js

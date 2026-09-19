@@ -78,10 +78,16 @@ VOX Tone Room, etc. -- only one client can talk to the amp at a time).
 If you'd rather click than type, there's a small local web GUI:
 
 ```bash
-npm run gui
+./run-gui
+# or: npm run gui
 ```
 
-Open the printed URL (`http://localhost:4242` by default) in any browser.
+`./run-gui` starts the server and opens it in your default browser
+automatically (real browser, real tab -- it uses macOS's `open` command).
+`npm run gui` just starts the server without opening anything, if you'd
+rather control that yourself.
+
+Either way it prints the URL (`http://localhost:4242` by default).
 It lists the JSON files in `presets/`, lets you pick a slot and click
 "Write to Amp" (with a confirm prompt before anything touches the amp), and
 has a "Dump" panel to pull a slot's sound off the amp as a new preset file.
