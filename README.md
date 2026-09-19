@@ -24,9 +24,7 @@ traffic with Wireshark, working out byte layouts and quirky encodings by
 hand, and then writing them up clearly enough that someone else could pick
 them up cold, is real, patient work, and it's the only reason anything in
 `lib/protocol.js` was possible. I didn't rediscover any of that protocol
-knowledge myself; I built a different tool on top of it. So, genuinely,
-thank you, Tobias, for doing the hard part, and for doing it as MIT-licensed
-open source so it could be built on at all.
+knowledge myself; I built a different tool on top of it.
 
 ## AI involvement (honest disclosure)
 
