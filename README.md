@@ -55,6 +55,15 @@ owner, who directed the work but did not hand-write the code. Concretely:
 - Testing against real hardware (a physical VOX VT40X) was done interactively
   with the owner present and approving each step — Claude does not have
   unsupervised access to anyone's amp.
+- A later session added a single-knob live Volume control and the
+  dropdown-based Current Rig picker (replacing an earlier version that
+  listed every preset as its own card, and before that a plain `<select>`
+  the owner explicitly asked to be replaced with something that matched
+  the rest of the page). Also found, in that same session: Phaser "Depth"
+  never accepts a live update at all (tested exhaustively, not assumed),
+  and Phaser "Manual" read back a different value than was sent despite
+  being acknowledged -- flagged as unresolved rather than guessed at,
+  since audio correctness can't be verified without physically hearing it.
 - While building this, Claude found and fixed a real bug: the upstream web
   app's Chorus effect silently discards its own Depth/Manual/Mix settings
   whenever a program also carries a Pedal 2 config, because both are wired to
@@ -99,10 +108,20 @@ automatically (real browser, real tab -- it uses macOS's `open` command).
 rather control that yourself.
 
 Either way it prints the URL (`http://localhost:4242` by default). It has
-three parts: **Current Rig** (Play Now -- hear a preset instantly, nothing
-saved, see "play" below), **Presets** (Preview -- inspect a preset with
-zero MIDI, or Write to Amp -- permanent, with a confirm prompt), and a
-**Dump** panel to pull a slot's sound off the amp as a new preset file.
+three parts:
+
+- **Current Rig** -- pick a preset from the dropdown and hit Play Now to
+  hear it instantly (nothing saved, see "play" below). Also has a Volume
+  slider that sets the amp's live Volume directly, on its own, without
+  loading a whole preset -- drag and release to apply.
+- **Presets** -- Preview inspects a preset's decoded values with zero MIDI;
+  Write to Amp is permanent, with a confirm prompt.
+- **Dump** -- pulls a slot's sound off the amp as a new preset file.
+
+The Current Rig dropdown is a small custom component (not a native
+`<select>`), styled to match the rest of the page and showing each
+preset's amp/pedal/reverb summary inline so you don't have to open
+something else to remember what's in it.
 
 It's a preset launcher, not a knob editor -- there are no sliders/dials
 here. For live knob-by-knob tweaking, use vox-amp-librarian's browser app;

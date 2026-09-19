@@ -18,8 +18,27 @@
   <main>
     <section>
       <h2>Current Rig</h2>
-      <p class="hint">"Play Now" makes the amp sound like a preset right now -- the same as turning its physical knobs, all at once. Nothing is written to any slot; power-cycling the amp or switching slots reverts it. Use this to just hear a preset without committing it anywhere.</p>
-      <div id="rig-list" class="cards"></div>
+      <p class="hint">Makes the amp sound like a preset right now -- the same as turning its physical knobs, all at once. Nothing is written to any slot; power-cycling the amp or switching slots reverts it.</p>
+      <div class="rig-form">
+        <div class="dropdown" id="rig-dropdown">
+          <button type="button" class="dropdown-trigger" id="rig-dropdown-trigger">
+            <span class="dropdown-trigger-text">
+              <span class="dropdown-trigger-name" id="rig-dropdown-name">Select a preset...</span>
+              <span class="dropdown-trigger-meta" id="rig-dropdown-meta"></span>
+            </span>
+            <span class="dropdown-arrow">&#9662;</span>
+          </button>
+          <div class="dropdown-menu" id="rig-dropdown-menu" hidden></div>
+        </div>
+        <button id="rig-play-button" class="play-button">Play Now</button>
+      </div>
+
+      <div class="live-dial">
+        <label for="live-volume">Volume</label>
+        <input type="range" id="live-volume" min="0" max="10" step="0.1" value="5" />
+        <span id="live-volume-value" class="live-dial-value">5.0</span>
+      </div>
+      <p class="hint">Drag and release to set the amp's live Volume directly, without loading a whole preset.</p>
     </section>
 
     <section>

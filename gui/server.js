@@ -4,9 +4,10 @@
 /**
  * Simple local web GUI for vox-preset-cli: browse the JSON presets in
  * ../presets, write one to a slot, or dump a slot as a new preset file.
- * No knob-by-knob editing here -- that's what the vox-amp-librarian browser
- * app already does well. This is just a friendlier front end for the same
- * write/dump operations apply-preset.js does on the command line.
+ * Not a full knob-by-knob editor -- that's what the vox-amp-librarian
+ * browser app already does well -- but Current Rig does have a couple of
+ * direct single-knob live controls (currently just Volume) for quick
+ * adjustments without needing a whole preset file.
  *
  * All actual MIDI I/O happens here in Node (via @julusian/midi, same as the
  * CLI) -- the browser page never touches MIDI directly, so there's no
@@ -120,6 +121,22 @@ async function doPlay(fileName) {
   return { programName: preset.programName || '(unnamed)', messageCount: messages.length, failed };
 }
 
+/**
+ * Sets a single amp field (e.g. Volume) live, right now, on whatever slot
+ * is currently active -- no preset file involved. Same underlying
+ * mechanism as doPlay, just one dial instead of a whole preset's worth.
+ */
+async function doSetAmpDial(key, value) {
+  const message = protocol.buildAmpDialLiveMessage(key, value);
+  const ports = openAmpPorts();
+  try {
+    await sendAndAwaitAck(ports, message, protocol.isAck, 800);
+  } finally {
+    ports.close();
+  }
+  return { key, value };
+}
+
 async function doDump(slot, saveAsFileName) {
   const ports = openAmpPorts();
   let programBytes;
@@ -196,6 +213,13 @@ async function handleApi(req, res) {
     if (req.method === 'POST' && req.url === '/api/play') {
       const body = await readJsonBody(req);
       const result = await doPlay(body.file);
+      res.end(JSON.stringify({ ok: true, result }));
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/api/live-dial') {
+      const body = await readJsonBody(req);
+      const result = await doSetAmpDial(body.key, body.value);
       res.end(JSON.stringify({ ok: true, result }));
       return;
     }

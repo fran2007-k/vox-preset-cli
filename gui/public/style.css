@@ -107,6 +107,94 @@ select, input[type="text"] {
 .dump-form { display: flex; align-items: end; gap: 1rem; flex-wrap: wrap; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; }
 .dump-form label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.8rem; color: var(--muted); }
 
+.rig-form {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.dropdown { position: relative; flex: 1; min-width: 0; }
+
+.dropdown-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  color: var(--text);
+  text-align: left;
+  font-size: 0.95rem;
+}
+.dropdown-trigger:hover { background: var(--panel); border-color: var(--accent); }
+.dropdown-trigger.open { border-color: var(--accent); border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+
+.dropdown-trigger-text { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.dropdown-trigger-name { font-weight: 600; }
+.dropdown-trigger-meta { font-size: 0.78rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dropdown-arrow { color: var(--muted); flex-shrink: 0; }
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-top: none;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.dropdown-option {
+  padding: 0.65rem 1rem;
+  cursor: pointer;
+  border-top: 1px solid var(--border);
+}
+.dropdown-option:first-child { border-top: none; }
+.dropdown-option:hover, .dropdown-option.highlighted { background: var(--bg); }
+.dropdown-option-name { font-weight: 600; font-size: 0.9rem; }
+.dropdown-option-meta { font-size: 0.78rem; color: var(--muted); margin-top: 0.1rem; }
+
+.live-dial {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+}
+.live-dial label { font-size: 0.85rem; color: var(--muted); min-width: 4.5rem; }
+.live-dial input[type="range"] {
+  flex: 1;
+  accent-color: var(--accent);
+}
+.live-dial-value { font-family: 'SF Mono', Menlo, monospace; font-size: 0.9rem; min-width: 2.5rem; text-align: right; }
+
+.live-dial {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+}
+.live-dial label { font-size: 0.85rem; color: var(--muted); min-width: 4.5rem; }
+.live-dial input[type="range"] {
+  flex: 1;
+  accent-color: var(--accent);
+}
+.live-dial-value { font-family: 'SF Mono', Menlo, monospace; font-size: 0.9rem; min-width: 2.5rem; text-align: right; }
+
 .log {
   background: #0d0b09;
   border: 1px solid var(--border);

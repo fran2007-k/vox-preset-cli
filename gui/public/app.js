@@ -3,8 +3,14 @@ const SLOTS = ['A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'B3', 'B4'];
 const statusDot = document.getElementById('status-dot');
 const statusText = document.getElementById('status-text');
 const presetsList = document.getElementById('presets-list');
-const rigList = document.getElementById('rig-list');
 const logEl = document.getElementById('log');
+
+const rigDropdown = document.getElementById('rig-dropdown');
+const rigTrigger = document.getElementById('rig-dropdown-trigger');
+const rigMenu = document.getElementById('rig-dropdown-menu');
+const rigNameEl = document.getElementById('rig-dropdown-name');
+const rigMetaEl = document.getElementById('rig-dropdown-meta');
+let selectedRigFile = null;
 
 function log(message, kind) {
   const line = document.createElement('div');
@@ -40,48 +46,87 @@ function slotSelectHtml(idPrefix, preferredSlot) {
 
 async function loadPresets() {
   presetsList.innerHTML = '<p class="hint">Loading...</p>';
-  rigList.innerHTML = '<p class="hint">Loading...</p>';
+  rigNameEl.textContent = 'Loading...';
+  rigMetaEl.textContent = '';
   const res = await fetch('/api/presets');
   const presets = await res.json();
 
-  renderRigList(presets);
+  renderRigDropdown(presets);
   renderPresetsList(presets);
 }
 
-function renderRigList(presets) {
-  if (presets.length === 0) {
-    rigList.innerHTML = '<p class="hint">No preset files in presets/ yet.</p>';
+function presetMeta(preset) {
+  return [preset.amplifier, preset.pedal1, preset.pedal2, preset.reverb].filter(Boolean).join(' · ');
+}
+
+function renderRigDropdown(presets) {
+  const valid = presets.filter((p) => !p.error);
+
+  if (valid.length === 0) {
+    rigNameEl.textContent = 'No presets in presets/ yet';
+    rigMetaEl.textContent = '';
+    rigMenu.innerHTML = '';
+    rigTrigger.disabled = true;
+    selectedRigFile = null;
     return;
   }
 
-  rigList.innerHTML = '';
-  for (const preset of presets) {
-    if (preset.error) continue;
-    const card = document.createElement('div');
-    card.className = 'card';
-    const meta = [preset.amplifier, preset.pedal1, preset.pedal2, preset.reverb].filter(Boolean).join(' · ');
-    card.innerHTML = `
-      <div class="card-row">
-        <div class="card-info">
-          <div class="card-name">${preset.programName}</div>
-          <div class="card-meta">${meta}</div>
-          <div class="card-file">${preset.file}</div>
-        </div>
-        <div class="card-actions">
-          <button class="play-button" data-file="${preset.file}">Play Now</button>
-        </div>
-      </div>`;
-    rigList.appendChild(card);
+  rigTrigger.disabled = false;
+
+  // keep the current selection if it still exists, otherwise default to the first
+  if (!valid.some((p) => p.file === selectedRigFile)) {
+    selectedRigFile = valid[0].file;
   }
 
-  document.querySelectorAll('.play-button').forEach((btn) => {
-    btn.addEventListener('click', onPlayClick);
+  rigMenu.innerHTML = valid.map((preset) => `
+    <div class="dropdown-option" data-file="${preset.file}">
+      <div class="dropdown-option-name">${preset.programName}</div>
+      <div class="dropdown-option-meta">${presetMeta(preset)}</div>
+    </div>
+  `).join('');
+
+  rigMenu.querySelectorAll('.dropdown-option').forEach((el) => {
+    el.addEventListener('click', () => {
+      selectedRigFile = el.dataset.file;
+      updateRigTriggerLabel(valid);
+      closeRigDropdown();
+    });
   });
+
+  updateRigTriggerLabel(valid);
 }
 
-async function onPlayClick(event) {
-  const btn = event.target;
-  const file = btn.dataset.file;
+function updateRigTriggerLabel(presets) {
+  const preset = presets.find((p) => p.file === selectedRigFile);
+  if (!preset) return;
+  rigNameEl.textContent = preset.programName;
+  rigMetaEl.textContent = presetMeta(preset);
+}
+
+function openRigDropdown() {
+  rigMenu.hidden = false;
+  rigTrigger.classList.add('open');
+  document.addEventListener('click', onDocumentClickCloseRig);
+}
+
+function closeRigDropdown() {
+  rigMenu.hidden = true;
+  rigTrigger.classList.remove('open');
+  document.removeEventListener('click', onDocumentClickCloseRig);
+}
+
+function onDocumentClickCloseRig(event) {
+  if (!rigDropdown.contains(event.target)) closeRigDropdown();
+}
+
+rigTrigger.addEventListener('click', () => {
+  if (rigMenu.hidden) openRigDropdown(); else closeRigDropdown();
+});
+
+async function onRigPlayClick() {
+  const btn = document.getElementById('rig-play-button');
+  const file = selectedRigFile;
+  if (!file) return;
 
   btn.disabled = true;
   btn.textContent = 'Playing...';
@@ -106,6 +151,31 @@ async function onPlayClick(event) {
     btn.textContent = 'Play Now';
   }
 }
+
+document.getElementById('rig-play-button').addEventListener('click', onRigPlayClick);
+
+const liveVolumeInput = document.getElementById('live-volume');
+const liveVolumeValue = document.getElementById('live-volume-value');
+
+liveVolumeInput.addEventListener('input', () => {
+  liveVolumeValue.textContent = parseFloat(liveVolumeInput.value).toFixed(1);
+});
+
+liveVolumeInput.addEventListener('change', async () => {
+  const value = parseFloat(liveVolumeInput.value);
+  try {
+    const res = await fetch('/api/live-dial', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: 'volume', value }),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    log(`Live Volume set to ${value.toFixed(1)}.`, 'ok');
+  } catch (err) {
+    log(`Failed to set live Volume: ${err.message}`, 'err');
+  }
+});
 
 function renderPresetsList(presets) {
   if (presets.length === 0) {

@@ -3,13 +3,13 @@
   "targetSlot": "A3",
   "amplifier": {
     "model": "VOX_AC30",
-    "gain": 4.0,
-    "treble": 7.5,
+    "gain": 3.0,
+    "treble": 6.5,
     "middle": 5.5,
-    "bass": 4.5,
-    "volume": 6.5,
+    "bass": 5.0,
+    "volume": 6.0,
     "presence": 5.0,
-    "resonance": 6.0,
+    "resonance": 5.5,
     "noiseReductionSensitivity": 3.0,
     "brightCap": true,
     "lowCut": false,
@@ -21,15 +21,15 @@
     "type": "COMP",
     "enabled": true,
     "params": {
-      "sens": 5.5,
-      "level": 6.5,
-      "attack": 4.0,
+      "sens": 5.0,
+      "level": 6.0,
+      "attack": 4.5,
       "voice": "TWO"
     }
   },
   "pedal2": {
     "type": "FLANGER",
-    "enabled": true,
+    "enabled": false,
     "params": {
       "speedHz": 0.3,
       "depth": 3.5,
@@ -43,8 +43,8 @@
     "type": "SPRING",
     "enabled": true,
     "params": {
-      "mix": 3.0,
-      "time": 4.0,
+      "mix": 2.0,
+      "time": 3.0,
       "preDelayMs": 0,
       "lowDamp": 3.6,
       "highDamp": 2.5
