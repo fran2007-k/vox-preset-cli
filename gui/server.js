@@ -56,6 +56,19 @@ function checkPorts() {
   return { connected, inputs: inNames, outputs: outNames };
 }
 
+/**
+ * Encodes+decodes a preset with zero MIDI I/O -- no port is opened, so this
+ * works even with the amp unplugged/off, and touches nothing on the
+ * hardware. Same thing apply-preset.js's `write --dry-run` does.
+ */
+function doPreview(fileName) {
+  const filePath = path.join(PRESETS_DIR, fileName);
+  if (!filePath.startsWith(PRESETS_DIR)) throw new Error('invalid file');
+  const preset = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  const programBytes = protocol.encodeProgram(preset);
+  return protocol.decodeProgram(programBytes);
+}
+
 async function doWrite(fileName, slotOverride) {
   const filePath = path.join(PRESETS_DIR, fileName);
   if (!filePath.startsWith(PRESETS_DIR)) throw new Error('invalid file');
@@ -143,6 +156,13 @@ async function handleApi(req, res) {
 
     if (req.method === 'GET' && req.url === '/api/status') {
       res.end(JSON.stringify(checkPorts()));
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/api/preview') {
+      const body = await readJsonBody(req);
+      const result = doPreview(body.file);
+      res.end(JSON.stringify({ ok: true, result }));
       return;
     }
 

@@ -62,23 +62,63 @@ async function loadPresets() {
       continue;
     }
 
+    const safeId = preset.file.replace(/[^a-zA-Z0-9]/g, '_');
     const meta = [preset.amplifier, preset.pedal1, preset.pedal2, preset.reverb].filter(Boolean).join(' · ');
     card.innerHTML = `
-      <div class="card-info">
-        <div class="card-name">${preset.programName}</div>
-        <div class="card-meta">${meta}</div>
-        <div class="card-file">${preset.file}</div>
+      <div class="card-row">
+        <div class="card-info">
+          <div class="card-name">${preset.programName}</div>
+          <div class="card-meta">${meta}</div>
+          <div class="card-file">${preset.file}</div>
+        </div>
+        <div class="card-actions">
+          <button class="preview-button secondary" data-file="${preset.file}" data-target="preview-${safeId}">Preview</button>
+          ${slotSelectHtml('write-' + safeId, preset.targetSlot)}
+          <button class="write-button" data-file="${preset.file}">Write to Amp</button>
+        </div>
       </div>
-      <div class="card-actions">
-        ${slotSelectHtml('write-' + preset.file.replace(/[^a-zA-Z0-9]/g, '_'), preset.targetSlot)}
-        <button class="write-button" data-file="${preset.file}">Write to Amp</button>
-      </div>`;
+      <pre class="preview-panel" id="preview-${safeId}" hidden></pre>`;
     presetsList.appendChild(card);
   }
 
   document.querySelectorAll('.write-button').forEach((btn) => {
     btn.addEventListener('click', onWriteClick);
   });
+  document.querySelectorAll('.preview-button').forEach((btn) => {
+    btn.addEventListener('click', onPreviewClick);
+  });
+}
+
+async function onPreviewClick(event) {
+  const btn = event.target;
+  const file = btn.dataset.file;
+  const panel = document.getElementById(btn.dataset.target);
+
+  // toggle off if already open
+  if (!panel.hidden) {
+    panel.hidden = true;
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Loading...';
+  try {
+    const res = await fetch('/api/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file }),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    panel.textContent = JSON.stringify(data.result, null, 2);
+    panel.hidden = false;
+    log(`Previewed ${file} -- no MIDI, nothing touched the amp.`);
+  } catch (err) {
+    log(`Preview failed for ${file}: ${err.message}`, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Preview';
+  }
 }
 
 async function onWriteClick(event) {

@@ -64,6 +64,9 @@ button.secondary:hover { border-color: var(--accent); }
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 1rem;
+}
+
+.card-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -75,6 +78,18 @@ button.secondary:hover { border-color: var(--accent); }
 .card-name { font-weight: 600; font-size: 1.05rem; }
 .card-meta { color: var(--muted); font-size: 0.82rem; margin-top: 0.2rem; }
 .card-file { color: var(--muted); font-size: 0.75rem; font-family: monospace; }
+
+.preview-panel {
+  margin: 0.75rem 0 0;
+  padding: 0.75rem;
+  background: #0d0b09;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.78rem;
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
 
 .card-actions { display: flex; align-items: center; gap: 0.5rem; }
 
