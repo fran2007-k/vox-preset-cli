@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>VOX Preset Launcher</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header>
+    <h1>VOX Preset Launcher</h1>
+    <div id="status" class="status">
+      <span class="dot" id="status-dot"></span>
+      <span id="status-text">checking...</span>
+      <button id="refresh-status">Refresh</button>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <h2>Presets</h2>
+      <p class="hint">Pick a preset, choose a slot, and write it directly to the amp's memory.</p>
+      <div id="presets-list" class="cards"></div>
+    </section>
+
+    <section>
+      <h2>Pull a sound off the amp</h2>
+      <p class="hint">Reads whatever is actually stored in a slot and saves it as a new preset file.</p>
+      <div class="dump-form">
+        <label>Slot
+          <select id="dump-slot">
+            <option>A1</option><option>A2</option><option>A3</option><option>A4</option>
+            <option>B1</option><option>B2</option><option>B3</option><option>B4</option>
+          </select>
+        </label>
+        <label>Save as
+          <input id="dump-filename" type="text" placeholder="my-preset.json" />
+        </label>
+        <button id="dump-button">Dump</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Log</h2>
+      <div id="log" class="log"></div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

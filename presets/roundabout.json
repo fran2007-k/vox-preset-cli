@@ -1,0 +1,53 @@
+{
+  "programName": "Roundabout",
+  "targetSlot": "A3",
+  "amplifier": {
+    "model": "VOX_AC30",
+    "gain": 4.0,
+    "treble": 7.5,
+    "middle": 5.5,
+    "bass": 4.5,
+    "volume": 6.5,
+    "presence": 5.0,
+    "resonance": 6.0,
+    "noiseReductionSensitivity": 3.0,
+    "brightCap": true,
+    "lowCut": false,
+    "midBoost": false,
+    "tubeBias": "OFF",
+    "ampClass": "A"
+  },
+  "pedal1": {
+    "type": "COMP",
+    "enabled": true,
+    "params": {
+      "sens": 5.5,
+      "level": 6.5,
+      "attack": 4.0,
+      "voice": "TWO"
+    }
+  },
+  "pedal2": {
+    "type": "FLANGER",
+    "enabled": true,
+    "params": {
+      "speedHz": 0.3,
+      "depth": 3.5,
+      "manual": 5.0,
+      "lowCut": false,
+      "highCut": false,
+      "resonance": 3.0
+    }
+  },
+  "reverb": {
+    "type": "SPRING",
+    "enabled": true,
+    "params": {
+      "mix": 3.0,
+      "time": 4.0,
+      "preDelayMs": 0,
+      "lowDamp": 3.6,
+      "highDamp": 2.5
+    }
+  }
+}

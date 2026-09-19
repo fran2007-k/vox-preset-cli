@@ -8,7 +8,8 @@
     "vox-preset": "./apply-preset.js"
   },
   "scripts": {
-    "start": "node apply-preset.js"
+    "start": "node apply-preset.js",
+    "gui": "node gui/server.js"
   },
   "dependencies": {
     "@julusian/midi": "^3.1.0"

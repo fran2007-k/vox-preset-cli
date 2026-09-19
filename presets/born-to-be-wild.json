@@ -1,0 +1,47 @@
+{
+  "programName": "Born to be wild",
+  "targetSlot": "A4",
+  "amplifier": {
+    "model": "BRIT_1959_TREBLE",
+    "gain": 6.0,
+    "treble": 7.0,
+    "middle": 6.0,
+    "bass": 5.0,
+    "volume": 7.0,
+    "presence": 6.0,
+    "resonance": 5.5,
+    "noiseReductionSensitivity": 3.0,
+    "brightCap": true,
+    "lowCut": false,
+    "midBoost": true,
+    "tubeBias": "OFF",
+    "ampClass": "AB"
+  },
+  "pedal1": {
+    "type": "TREBLE_BOOST",
+    "enabled": true,
+    "params": {
+      "drive": 4.0,
+      "tone": 6.0,
+      "level": 5.5,
+      "treble": 6.0,
+      "middle": 5.0,
+      "bass": 5.0
+    }
+  },
+  "pedal2": {
+    "type": "FLANGER",
+    "enabled": false
+  },
+  "reverb": {
+    "type": "ROOM",
+    "enabled": true,
+    "params": {
+      "mix": 2.0,
+      "time": 3.0,
+      "preDelayMs": 0,
+      "lowDamp": 3.6,
+      "highDamp": 2.5
+    }
+  }
+}

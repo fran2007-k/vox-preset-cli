@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "vox-preset-gui",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["/Users/kol/scripts/vox-preset-cli/gui/server.js"],
+      "port": 4242
+    }
+  ]
+}

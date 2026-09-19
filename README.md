@@ -26,11 +26,13 @@ owner, who directed the work but did not hand-write the code. Concretely:
   logic (`lib/protocol.js`) from that Kotlin code into this JavaScript
   implementation.
 - Claude wrote all of the code in this repo (`lib/protocol.js`, `lib/midi.js`,
-  `apply-preset.js`, this README), across two sessions with the same owner:
-  the initial `write`/`read` implementation, then the `dump` command and the
-  full parameter reference tables in this README, added when the owner
-  pointed out the first version left "how do I write the JSON in the first
-  place" underdocumented.
+  `apply-preset.js`, `gui/`, this README), across three sessions with the
+  same owner: the initial `write`/`read` implementation, then `dump` plus
+  the parameter reference tables (added when the owner pointed out the first
+  version left "how do I write the JSON in the first place"
+  underdocumented), then the `gui/` web launcher, scoped down from "full
+  knob editor" to "preset launcher" specifically to avoid duplicating what
+  vox-amp-librarian already does well.
 - Claude chose the MIDI library (`@julusian/midi`) and the overall CLI shape
   (`list-ports` / `write` / `read` / `dump`) after the owner picked
   "standalone CLI" over "a feature inside the web app" as the architecture.
@@ -70,6 +72,27 @@ npm install
 Requires the amp connected via USB and powered on, and **nothing else**
 holding the MIDI connection (close the vox-amp-librarian browser tab, quit
 VOX Tone Room, etc. -- only one client can talk to the amp at a time).
+
+## GUI (optional)
+
+If you'd rather click than type, there's a small local web GUI:
+
+```bash
+npm run gui
+```
+
+Open the printed URL (`http://localhost:4242` by default) in any browser.
+It lists the JSON files in `presets/`, lets you pick a slot and click
+"Write to Amp" (with a confirm prompt before anything touches the amp), and
+has a "Dump" panel to pull a slot's sound off the amp as a new preset file.
+
+It's a preset launcher, not a knob editor -- there are no sliders/dials
+here. For live knob-by-knob tweaking, use vox-amp-librarian's browser app;
+this GUI is for managing/sharing/applying whole presets as files. All the
+actual MIDI I/O happens in the Node process (same `lib/protocol.js` and
+`lib/midi.js` the CLI uses) -- the browser page itself never touches MIDI,
+so there's no WebMIDI permission prompt and nothing extra to trust in the
+frontend beyond what's already in this repo.
 
 ## Usage
 
