@@ -169,6 +169,7 @@ const knobTrack = document.getElementById('knob-track');
 const knobFill = document.getElementById('knob-fill');
 const knobPointer = document.getElementById('knob-pointer');
 const knobValueEl = document.getElementById('knob-value');
+const volumeSlider = document.getElementById('volume-slider');
 
 function polarToCartesian(cx, cy, r, angleDeg) {
   const rad = ((angleDeg - 90) * Math.PI) / 180;
@@ -193,6 +194,7 @@ function renderKnob(value) {
   knobPointer.style.transform = `rotate(${angle}deg)`;
   knobValueEl.textContent = value.toFixed(1);
   knobEl.setAttribute('aria-valuenow', value.toFixed(1));
+  volumeSlider.value = value;
 }
 
 knobTrack.setAttribute('d', describeArc(60, 60, KNOB_RADIUS, KNOB_MIN_ANGLE, KNOB_MAX_ANGLE));
@@ -262,6 +264,17 @@ knobEl.addEventListener('keydown', (event) => {
   event.preventDefault();
   knobValue = clampKnobValue(knobValue + delta);
   renderKnob(knobValue);
+  commitVolume(knobValue);
+});
+
+// Easier-to-grab alternative to the knob -- same value, same commit-on-
+// release behavior, deliberately muted so the knob stays the visual focus.
+volumeSlider.addEventListener('input', () => {
+  knobValue = clampKnobValue(parseFloat(volumeSlider.value));
+  renderKnob(knobValue);
+});
+
+volumeSlider.addEventListener('change', () => {
   commitVolume(knobValue);
 });
 

@@ -208,7 +208,20 @@ select, input[type="text"] {
   font-size: 0.78rem;
   letter-spacing: 0.08em;
   color: var(--muted);
+  min-width: 4.5rem;
 }
+
+.volume-slider {
+  flex: 1;
+  /* deliberately muted -- the knob is the primary control, this is a
+     secondary/easier way to reach the same value, not meant to compete
+     for attention */
+  accent-color: var(--muted);
+  opacity: 0.7;
+}
+.volume-slider:hover, .volume-slider:focus-visible { opacity: 1; }
+
+.hint-spaced { margin-top: 0.75rem; }
 
 .log {
   background: #0d0b09;
