@@ -1,0 +1,49 @@
+{
+  "programName": "Adios Cerati",
+  "amplifier": {
+    "model": "BRIT_1959_NORMAL",
+    "gain": 5.0,
+    "treble": 5.5,
+    "middle": 6.0,
+    "bass": 5.0,
+    "volume": 6.5,
+    "presence": 5.0,
+    "resonance": 5.0,
+    "noiseReductionSensitivity": 3.0,
+    "lowCut": false,
+    "midBoost": true,
+    "tubeBias": "OFF",
+    "ampClass": "A"
+  },
+  "pedal1": {
+    "type": "COMP",
+    "enabled": true,
+    "params": {
+      "sens": 5.0,
+      "level": 6.0,
+      "attack": 4.5,
+      "voice": "TWO"
+    }
+  },
+  "pedal2": {
+    "type": "ANALOG_DELAY",
+    "enabled": true,
+    "params": {
+      "timeMs": 280,
+      "level": 3.5,
+      "feedback": 2.5,
+      "tone": 5.0
+    }
+  },
+  "reverb": {
+    "type": "HALL",
+    "enabled": true,
+    "params": {
+      "mix": 3.5,
+      "time": 4.5,
+      "preDelayMs": 0,
+      "lowDamp": 3.6,
+      "highDamp": 2.5
+    }
+  }
+}

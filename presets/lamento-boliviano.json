@@ -1,0 +1,46 @@
+{
+  "programName": "Lamento Boliv",
+  "amplifier": {
+    "model": "VOX_AC30",
+    "gain": 3.0,
+    "treble": 7.0,
+    "middle": 5.0,
+    "bass": 4.0,
+    "volume": 6.5,
+    "presence": 5.5,
+    "resonance": 5.5,
+    "noiseReductionSensitivity": 3.0,
+    "brightCap": true,
+    "lowCut": false,
+    "midBoost": false,
+    "tubeBias": "OFF",
+    "ampClass": "A"
+  },
+  "pedal1": {
+    "type": "CHORUS",
+    "enabled": true,
+    "params": {
+      "speedHz": 1.3,
+      "depth": 7.0,
+      "manual": 5.0,
+      "mix": 6.5,
+      "lowCut": false,
+      "highCut": false
+    }
+  },
+  "pedal2": {
+    "type": "FLANGER",
+    "enabled": false
+  },
+  "reverb": {
+    "type": "PLATE",
+    "enabled": true,
+    "params": {
+      "mix": 3.0,
+      "time": 3.5,
+      "preDelayMs": 0,
+      "lowDamp": 3.6,
+      "highDamp": 2.5
+    }
+  }
+}
