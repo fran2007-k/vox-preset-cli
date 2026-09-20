@@ -137,6 +137,32 @@ async function doSetAmpDial(key, value) {
   return { key, value };
 }
 
+/**
+ * Reads the amp's actual current live state and returns just its Volume,
+ * so the GUI's knob/slider can start at the real value instead of always
+ * defaulting to 5.0. Callers should treat any failure here (amp off,
+ * unplugged, another client connected) as "leave it at the default" --
+ * not an error worth alarming the user over, since "not connected yet" is
+ * a completely normal state on page load.
+ */
+async function doGetCurrentVolume() {
+  const ports = openAmpPorts();
+  try {
+    const requestMessage = protocol.buildRequestCurrentProgramMessage();
+    const response = await sendAndAwaitResponse(ports, requestMessage, 1500);
+    const payload = response.slice(2, -1);
+    const expectedPrefix = [0x30, 0x00, 0x01, 0x34, 0x40, 0x00];
+    const prefixMatches = expectedPrefix.every((b, i) => payload[i] === b);
+    if (!prefixMatches) throw new Error('Unexpected response from amp.');
+    const programBytes = Buffer.from(payload.slice(6));
+    if (programBytes.length !== 0x46) throw new Error(`Expected 70 bytes, got ${programBytes.length}.`);
+    const decoded = protocol.decodeProgram(programBytes);
+    return { volume: decoded.amplifier.volume };
+  } finally {
+    ports.close();
+  }
+}
+
 async function doDump(slot, saveAsFileName) {
   const ports = openAmpPorts();
   let programBytes;
@@ -200,6 +226,12 @@ async function handleApi(req, res) {
 
     if (req.method === 'GET' && req.url === '/api/status') {
       res.end(JSON.stringify(checkPorts()));
+      return;
+    }
+
+    if (req.method === 'GET' && req.url === '/api/current-volume') {
+      const result = await doGetCurrentVolume();
+      res.end(JSON.stringify({ ok: true, result }));
       return;
     }
 

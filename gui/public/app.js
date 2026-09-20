@@ -420,6 +420,23 @@ document.getElementById('dump-button').addEventListener('click', async () => {
 
 document.getElementById('refresh-status').addEventListener('click', refreshStatus);
 
+async function initVolumeFromAmp() {
+  try {
+    const res = await fetch('/api/current-volume');
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'unknown error');
+    knobValue = clampKnobValue(data.result.volume);
+    renderKnob(knobValue);
+    log(`Volume knob synced to the amp's actual current value (${knobValue.toFixed(1)}).`, 'ok');
+  } catch (err) {
+    // Amp not connected (or some other read failure) is a completely
+    // normal state on page load -- just keep the 5.0 default quietly,
+    // no need to alarm anyone with red error text for this.
+    log("Couldn't read the amp's current Volume (not connected?) -- knob left at the default 5.0.");
+  }
+}
+
 refreshStatus();
 loadPresets();
+initVolumeFromAmp();
 log('GUI loaded. Only one client (this GUI, the CLI, or the browser librarian) can hold the MIDI connection at a time.');
