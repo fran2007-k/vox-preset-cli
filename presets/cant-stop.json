@@ -30,10 +30,10 @@
     "type": "ORG_PHASER_1",
     "enabled": true,
     "params": {
-      "speedHz": 1.8,
-      "resonance": 6.5,
-      "manual": 6.0,
-      "depth": 7.0
+      "speedHz": 0.6,
+      "resonance": 3.0,
+      "manual": 5.5,
+      "depth": 4.0
     }
   },
   "reverb": {
