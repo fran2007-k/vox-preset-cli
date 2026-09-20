@@ -139,16 +139,69 @@ async function doSetAmpDial(key, value) {
   return { key, value };
 }
 
+// A handful of fields are known (see README's "play vs write" section) to
+// not reliably reflect a live update when read back from the amp -- Chorus
+// Speed reports a stale/unrelated value, and Phaser Depth / Delay modDepth
+// simply don't accept live updates at all. Excluding exactly these from the
+// comparison keeps matching EXACT rather than needing a fuzzy numeric
+// tolerance: current-state and preset both go through the same encode/decode
+// round trip (see doGetCurrentRig below), so anything not on this list will
+// either match bit-for-bit or genuinely isn't the same preset.
+const UNRELIABLE_LIVE_PARAMS = {
+  pedal1: { CHORUS: ['speedHz'] },
+  pedal2: {
+    BLK_PHASER: ['depth'], ORG_PHASER_1: ['depth'], ORG_PHASER_2: ['depth'],
+    TAPE_ECHO: ['modDepth'], ANALOG_DELAY: ['modDepth'],
+  },
+};
+
+function paramsMatch(side, type, a, b) {
+  const skip = (UNRELIABLE_LIVE_PARAMS[side] && UNRELIABLE_LIVE_PARAMS[side][type]) || [];
+  const keys = new Set([...Object.keys(a || {}), ...Object.keys(b || {})]);
+  for (const key of keys) {
+    if (skip.includes(key)) continue;
+    if ((a || {})[key] !== (b || {})[key]) return false;
+  }
+  return true;
+}
+
+const AMP_COMPARE_KEYS = [
+  'gain', 'treble', 'middle', 'bass', 'volume', 'presence', 'resonance',
+  'noiseReductionSensitivity', 'brightCap', 'lowCut', 'midBoost', 'tubeBias', 'ampClass',
+];
+
+function currentMatchesPreset(current, preset) {
+  if (current.amplifier.model !== preset.amplifier.model) return false;
+  for (const key of AMP_COMPARE_KEYS) {
+    if (current.amplifier[key] !== preset.amplifier[key]) return false;
+  }
+
+  if (current.pedal1.type !== preset.pedal1.type || current.pedal1.enabled !== preset.pedal1.enabled) return false;
+  if (current.pedal1.enabled && !paramsMatch('pedal1', current.pedal1.type, current.pedal1.params, preset.pedal1.params)) return false;
+
+  if (current.pedal2.type !== preset.pedal2.type || current.pedal2.enabled !== preset.pedal2.enabled) return false;
+  if (current.pedal2.enabled && !paramsMatch('pedal2', current.pedal2.type, current.pedal2.params, preset.pedal2.params)) return false;
+
+  if (current.reverb.type !== preset.reverb.type || current.reverb.enabled !== preset.reverb.enabled) return false;
+  if (current.reverb.enabled && !paramsMatch('reverb', current.reverb.type, current.reverb.params, preset.reverb.params)) return false;
+
+  return true;
+}
+
 /**
- * Reads the amp's actual current live state and returns just its Volume,
- * so the GUI's knob/slider can start at the real value instead of always
- * defaulting to 5.0. Callers should treat any failure here (amp off,
- * unplugged, another client connected) as "leave it at the default" --
- * not an error worth alarming the user over, since "not connected yet" is
- * a completely normal state on page load.
+ * Reads the amp's actual current live state (whatever's really sounding --
+ * from this GUI, the CLI, or the amp's own physical knobs) and tries to
+ * identify it as one of the preset files in presets/, so "Current Rig" can
+ * reflect reality on page load instead of just defaulting to nothing. Also
+ * always returns Volume, so the knob/slider can start at the real value
+ * even when nothing matches. Callers should treat any read failure here
+ * (amp off, unplugged, another client connected) as "leave everything at
+ * the default" -- not an error worth alarming the user over, since "not
+ * connected yet" is a completely normal state on page load.
  */
-async function doGetCurrentVolume() {
+async function doGetCurrentRig() {
   const ports = openAmpPorts();
+  let current;
   try {
     const requestMessage = protocol.buildRequestCurrentProgramMessage();
     const response = await sendAndAwaitResponse(ports, requestMessage, 1500);
@@ -158,11 +211,33 @@ async function doGetCurrentVolume() {
     if (!prefixMatches) throw new Error('Unexpected response from amp.');
     const programBytes = Buffer.from(payload.slice(6));
     if (programBytes.length !== 0x46) throw new Error(`Expected 70 bytes, got ${programBytes.length}.`);
-    const decoded = protocol.decodeProgram(programBytes);
-    return { volume: decoded.amplifier.volume };
+    current = protocol.decodeProgramToPresetInput(programBytes);
   } finally {
     ports.close();
   }
+
+  for (const file of listPresetFiles()) {
+    if (file.error) continue;
+    let preset;
+    try {
+      preset = JSON.parse(fs.readFileSync(path.join(PRESETS_DIR, file.file), 'utf8'));
+    } catch (err) {
+      continue;
+    }
+    const normalized = protocol.decodeProgramToPresetInput(protocol.encodeProgram(preset));
+    if (currentMatchesPreset(current, normalized)) {
+      return { matched: true, file: file.file, programName: preset.programName || '(unnamed)', volume: current.amplifier.volume };
+    }
+  }
+
+  return {
+    matched: false,
+    volume: current.amplifier.volume,
+    amplifier: current.amplifier.model,
+    pedal1: current.pedal1.enabled ? current.pedal1.type : null,
+    pedal2: current.pedal2.enabled ? current.pedal2.type : null,
+    reverb: current.reverb.enabled ? current.reverb.type : null,
+  };
 }
 
 async function doDump(slot, saveAsFileName) {
@@ -231,8 +306,8 @@ async function handleApi(req, res) {
       return;
     }
 
-    if (req.method === 'GET' && req.url === '/api/current-volume') {
-      const result = await doGetCurrentVolume();
+    if (req.method === 'GET' && req.url === '/api/current-rig') {
+      const result = await doGetCurrentRig();
       res.end(JSON.stringify({ ok: true, result }));
       return;
     }

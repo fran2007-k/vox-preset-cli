@@ -56,8 +56,6 @@ button:hover { background: var(--accent-hover); }
 button:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
 button.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
 button.secondary:hover { border-color: var(--accent); }
-button.play-button { background: var(--ok); }
-button.play-button:hover { background: #6bbf7b; }
 
 .cards { display: flex; flex-direction: column; gap: 0.75rem; }
 
@@ -111,8 +109,16 @@ select, input[type="text"] {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
 }
+
+.rig-status {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0 0 1rem;
+}
+.rig-status.ok { color: var(--ok); }
+.rig-status.err { color: var(--err); }
 
 .dropdown { position: relative; flex: 1; min-width: 0; }
 

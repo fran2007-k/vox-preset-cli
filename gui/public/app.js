@@ -10,6 +10,7 @@ const rigTrigger = document.getElementById('rig-dropdown-trigger');
 const rigMenu = document.getElementById('rig-dropdown-menu');
 const rigNameEl = document.getElementById('rig-dropdown-name');
 const rigMetaEl = document.getElementById('rig-dropdown-meta');
+const rigStatusEl = document.getElementById('rig-status');
 let selectedRigFile = null;
 
 function log(message, kind) {
@@ -44,15 +45,19 @@ function slotSelectHtml(idPrefix, preferredSlot) {
   return `<select id="${idPrefix}-slot">${options}</select>`;
 }
 
+let loadedPresets = [];
+
 async function loadPresets() {
   presetsList.innerHTML = '<p class="hint">Loading...</p>';
   rigNameEl.textContent = 'Loading...';
   rigMetaEl.textContent = '';
   const res = await fetch('/api/presets');
   const presets = await res.json();
+  loadedPresets = presets;
 
   renderRigDropdown(presets);
   renderPresetsList(presets);
+  return presets;
 }
 
 function presetMeta(preset) {
@@ -73,9 +78,14 @@ function renderRigDropdown(presets) {
 
   rigTrigger.disabled = false;
 
-  // keep the current selection if it still exists, otherwise default to the first
-  if (!valid.some((p) => p.file === selectedRigFile)) {
-    selectedRigFile = valid[0].file;
+  // Keep the current selection if it still exists. Otherwise, unlike a
+  // normal dropdown, we do NOT default to the first entry -- Current Rig is
+  // supposed to reflect what's actually playing, and defaulting to some
+  // arbitrary preset's name would claim that falsely. Leave the placeholder
+  // up until either the user picks one or initCurrentRigFromAmp() detects
+  // what's really on the amp.
+  if (selectedRigFile && !valid.some((p) => p.file === selectedRigFile)) {
+    selectedRigFile = null;
   }
 
   rigMenu.innerHTML = valid.map((preset) => `
@@ -90,6 +100,7 @@ function renderRigDropdown(presets) {
       selectedRigFile = el.dataset.file;
       updateRigTriggerLabel(valid);
       closeRigDropdown();
+      playSelectedRig();
     });
   });
 
@@ -97,6 +108,11 @@ function renderRigDropdown(presets) {
 }
 
 function updateRigTriggerLabel(presets) {
+  if (!selectedRigFile) {
+    rigNameEl.textContent = 'Select a preset...';
+    rigMetaEl.textContent = '';
+    return;
+  }
   const preset = presets.find((p) => p.file === selectedRigFile);
   if (!preset) return;
   rigNameEl.textContent = preset.programName;
@@ -123,13 +139,20 @@ rigTrigger.addEventListener('click', () => {
   if (rigMenu.hidden) openRigDropdown(); else closeRigDropdown();
 });
 
-async function onRigPlayClick() {
-  const btn = document.getElementById('rig-play-button');
+function setRigStatus(text, kind) {
+  rigStatusEl.textContent = text;
+  rigStatusEl.className = 'rig-status' + (kind ? ' ' + kind : '');
+}
+
+// Selecting a preset from the dropdown IS the action -- no separate "Play
+// Now" button. Current Rig always reflects what's actually sounding on the
+// amp right now, not just a pending choice.
+async function playSelectedRig() {
   const file = selectedRigFile;
   if (!file) return;
 
-  btn.disabled = true;
-  btn.textContent = 'Playing...';
+  rigTrigger.disabled = true;
+  setRigStatus(`Playing "${rigNameEl.textContent}"...`);
   log(`Sending ${file} live to the amp's current rig (nothing will be saved)...`);
   try {
     const res = await fetch('/api/play', {
@@ -150,19 +173,18 @@ async function onRigPlayClick() {
     }
 
     if (data.result.failed && data.result.failed.length > 0) {
-      log(`Done, with ${data.result.failed.length} field(s) the amp didn't accept live (known hardware limitation): ${data.result.failed.join(', ')}`, 'ok');
+      setRigStatus(`Now playing: "${data.result.programName}" -- ${data.result.failed.length} field(s) the amp didn't accept live (known hardware limitation): ${data.result.failed.join(', ')}`, 'ok');
     } else {
-      log(`Done: the amp should now sound like "${data.result.programName}" (${data.result.messageCount} live messages, nothing written).`, 'ok');
+      setRigStatus(`Now playing: "${data.result.programName}"`, 'ok');
     }
+    log(`Done: the amp should now sound like "${data.result.programName}" (${data.result.messageCount} live messages, nothing written).`, 'ok');
   } catch (err) {
+    setRigStatus(`Failed to play: ${err.message}`, 'err');
     log(`Failed: ${err.message}`, 'err');
   } finally {
-    btn.disabled = false;
-    btn.textContent = 'Play Now';
+    rigTrigger.disabled = false;
   }
 }
-
-document.getElementById('rig-play-button').addEventListener('click', onRigPlayClick);
 
 // --- Rotary knob (Volume) -------------------------------------------------
 // Mirrors the real amp's own knob: min/max sit near the bottom with a gap,
@@ -430,23 +452,41 @@ document.getElementById('dump-button').addEventListener('click', async () => {
 
 document.getElementById('refresh-status').addEventListener('click', refreshStatus);
 
-async function initVolumeFromAmp() {
+// On page load, Current Rig should reflect what's ACTUALLY playing on the
+// amp right now -- from this GUI, the CLI, or the amp's own physical knobs
+// -- rather than defaulting to nothing or to an arbitrary first preset.
+// Also syncs the Volume knob either way, matched or not.
+async function initCurrentRigFromAmp() {
   try {
-    const res = await fetch('/api/current-volume');
+    const res = await fetch('/api/current-rig');
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || 'unknown error');
-    knobValue = clampKnobValue(data.result.volume);
+    const result = data.result;
+
+    knobValue = clampKnobValue(result.volume);
     renderKnob(knobValue);
-    log(`Volume knob synced to the amp's actual current value (${knobValue.toFixed(1)}).`, 'ok');
+
+    if (result.matched) {
+      selectedRigFile = result.file;
+      updateRigTriggerLabel(loadedPresets.filter((p) => !p.error));
+      setRigStatus(`Now playing: "${result.programName}" (detected from the amp)`, 'ok');
+      log(`Current Rig synced: the amp is currently sounding like "${result.programName}".`, 'ok');
+    } else {
+      const parts = [result.amplifier, result.pedal1, result.pedal2, result.reverb].filter(Boolean).join(' · ');
+      setRigStatus(`On the amp right now: ${parts || '(unknown)'} -- doesn't match any saved preset.`);
+      log("Current Rig synced: the amp's sound doesn't match any saved preset (Volume knob still synced).");
+    }
   } catch (err) {
     // Amp not connected (or some other read failure) is a completely
-    // normal state on page load -- just keep the 5.0 default quietly,
-    // no need to alarm anyone with red error text for this.
-    log("Couldn't read the amp's current Volume (not connected?) -- knob left at the default 5.0.");
+    // normal state on page load -- just keep the defaults quietly, no
+    // need to alarm anyone with red error text for this.
+    log("Couldn't read the amp's current state (not connected?) -- Current Rig left at defaults.");
   }
 }
 
 refreshStatus();
-loadPresets();
-initVolumeFromAmp();
+(async () => {
+  await loadPresets();
+  await initCurrentRigFromAmp();
+})();
 log('GUI loaded. Only one client (this GUI, the CLI, or the browser librarian) can hold the MIDI connection at a time.');
