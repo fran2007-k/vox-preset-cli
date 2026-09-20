@@ -34,11 +34,18 @@
       </div>
 
       <div class="live-dial">
-        <label for="live-volume">Volume</label>
-        <input type="range" id="live-volume" min="0" max="10" step="0.1" value="5" />
-        <span id="live-volume-value" class="live-dial-value">5.0</span>
+        <div class="knob" id="volume-knob" tabindex="0" role="slider" aria-label="Volume" aria-valuemin="0" aria-valuemax="10" aria-valuenow="5">
+          <svg viewBox="0 0 120 120" class="knob-svg">
+            <path id="knob-track" class="knob-track" />
+            <path id="knob-fill" class="knob-fill" />
+            <circle cx="60" cy="60" r="38" class="knob-body" />
+            <line id="knob-pointer" class="knob-pointer" x1="60" y1="60" x2="60" y2="30" />
+          </svg>
+          <div class="knob-value" id="knob-value">5.0</div>
+        </div>
+        <div class="knob-label">VOLUME</div>
       </div>
-      <p class="hint">Drag and release to set the amp's live Volume directly, without loading a whole preset.</p>
+      <p class="hint">Drag up/down (or scroll) and release to set the amp's live Volume directly, without loading a whole preset.</p>
     </section>
 
     <section>

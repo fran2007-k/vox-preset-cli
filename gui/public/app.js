@@ -154,15 +154,53 @@ async function onRigPlayClick() {
 
 document.getElementById('rig-play-button').addEventListener('click', onRigPlayClick);
 
-const liveVolumeInput = document.getElementById('live-volume');
-const liveVolumeValue = document.getElementById('live-volume-value');
+// --- Rotary knob (Volume) -------------------------------------------------
+// Mirrors the real amp's own knob: min/max sit near the bottom with a gap,
+// sweeping up and over the top, matching how vox-amp-librarian's own knobs
+// (and the physical amp) work -- drag vertically to turn, release to commit.
 
-liveVolumeInput.addEventListener('input', () => {
-  liveVolumeValue.textContent = parseFloat(liveVolumeInput.value).toFixed(1);
-});
+const KNOB_MIN_ANGLE = -135;
+const KNOB_MAX_ANGLE = 135;
+const KNOB_RADIUS = 46;
+const KNOB_DRAG_RANGE_PX = 160; // vertical px to sweep the full 0-10 range
 
-liveVolumeInput.addEventListener('change', async () => {
-  const value = parseFloat(liveVolumeInput.value);
+const knobEl = document.getElementById('volume-knob');
+const knobTrack = document.getElementById('knob-track');
+const knobFill = document.getElementById('knob-fill');
+const knobPointer = document.getElementById('knob-pointer');
+const knobValueEl = document.getElementById('knob-value');
+
+function polarToCartesian(cx, cy, r, angleDeg) {
+  const rad = ((angleDeg - 90) * Math.PI) / 180;
+  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+}
+
+function describeArc(cx, cy, r, startAngle, endAngle) {
+  if (endAngle <= startAngle) return '';
+  const start = polarToCartesian(cx, cy, r, startAngle);
+  const end = polarToCartesian(cx, cy, r, endAngle);
+  const largeArcFlag = endAngle - startAngle > 180 ? 1 : 0;
+  return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArcFlag} 1 ${end.x} ${end.y}`;
+}
+
+function valueToAngle(value) {
+  return KNOB_MIN_ANGLE + (value / 10) * (KNOB_MAX_ANGLE - KNOB_MIN_ANGLE);
+}
+
+function renderKnob(value) {
+  const angle = valueToAngle(value);
+  knobFill.setAttribute('d', describeArc(60, 60, KNOB_RADIUS, KNOB_MIN_ANGLE, angle));
+  knobPointer.style.transform = `rotate(${angle}deg)`;
+  knobValueEl.textContent = value.toFixed(1);
+  knobEl.setAttribute('aria-valuenow', value.toFixed(1));
+}
+
+knobTrack.setAttribute('d', describeArc(60, 60, KNOB_RADIUS, KNOB_MIN_ANGLE, KNOB_MAX_ANGLE));
+
+let knobValue = 5.0;
+renderKnob(knobValue);
+
+async function commitVolume(value) {
   try {
     const res = await fetch('/api/live-dial', {
       method: 'POST',
@@ -175,6 +213,56 @@ liveVolumeInput.addEventListener('change', async () => {
   } catch (err) {
     log(`Failed to set live Volume: ${err.message}`, 'err');
   }
+}
+
+function clampKnobValue(v) {
+  return Math.round(Math.max(0, Math.min(10, v)) * 10) / 10;
+}
+
+let dragStartY = null;
+let dragStartValue = 5.0;
+
+knobEl.addEventListener('pointerdown', (event) => {
+  dragStartY = event.clientY;
+  dragStartValue = knobValue;
+  knobEl.setPointerCapture(event.pointerId);
+  knobEl.focus();
+});
+
+knobEl.addEventListener('pointermove', (event) => {
+  if (dragStartY === null) return;
+  const deltaPx = dragStartY - event.clientY;
+  knobValue = clampKnobValue(dragStartValue + (deltaPx / KNOB_DRAG_RANGE_PX) * 10);
+  renderKnob(knobValue);
+});
+
+function endKnobDrag() {
+  if (dragStartY === null) return;
+  dragStartY = null;
+  commitVolume(knobValue);
+}
+
+knobEl.addEventListener('pointerup', endKnobDrag);
+knobEl.addEventListener('pointercancel', endKnobDrag);
+
+let wheelCommitTimer = null;
+knobEl.addEventListener('wheel', (event) => {
+  event.preventDefault();
+  knobValue = clampKnobValue(knobValue + (event.deltaY < 0 ? 0.1 : -0.1));
+  renderKnob(knobValue);
+  clearTimeout(wheelCommitTimer);
+  wheelCommitTimer = setTimeout(() => commitVolume(knobValue), 300);
+}, { passive: false });
+
+knobEl.addEventListener('keydown', (event) => {
+  let delta = 0;
+  if (event.key === 'ArrowUp' || event.key === 'ArrowRight') delta = 0.1;
+  if (event.key === 'ArrowDown' || event.key === 'ArrowLeft') delta = -0.1;
+  if (delta === 0) return;
+  event.preventDefault();
+  knobValue = clampKnobValue(knobValue + delta);
+  renderKnob(knobValue);
+  commitVolume(knobValue);
 });
 
 function renderPresetsList(presets) {
