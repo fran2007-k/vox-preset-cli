@@ -118,7 +118,9 @@ async function doPlay(fileName) {
     ports.close();
   }
 
-  return { programName: preset.programName || '(unnamed)', messageCount: messages.length, failed };
+  const effectiveVolume = { ...protocol.AMP_DEFAULTS, ...(preset.amplifier || {}) }.volume;
+
+  return { programName: preset.programName || '(unnamed)', messageCount: messages.length, failed, volume: effectiveVolume };
 }
 
 /**

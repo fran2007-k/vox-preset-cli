@@ -139,6 +139,16 @@ async function onRigPlayClick() {
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error);
+
+    // Playing a preset changes the amp's actual Volume too -- keep the
+    // knob/slider in sync with reality, unless that specific field was
+    // one the amp didn't accept (rare, but don't lie about it if so).
+    const volumeApplied = !data.result.failed || !data.result.failed.includes('amplifier.volume');
+    if (volumeApplied && typeof data.result.volume === 'number') {
+      knobValue = clampKnobValue(data.result.volume);
+      renderKnob(knobValue);
+    }
+
     if (data.result.failed && data.result.failed.length > 0) {
       log(`Done, with ${data.result.failed.length} field(s) the amp didn't accept live (known hardware limitation): ${data.result.failed.join(', ')}`, 'ok');
     } else {

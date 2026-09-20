@@ -4,11 +4,11 @@
   "amplifier": {
     "model": "DELUXE_CL_NORMAL",
     "gain": 3.5,
-    "treble": 7.0,
+    "treble": 5.5,
     "middle": 4.5,
     "bass": 4.0,
     "volume": 6.0,
-    "presence": 6.0,
+    "presence": 4.0,
     "resonance": 6.0,
     "noiseReductionSensitivity": 3.0,
     "lowCut": false,
