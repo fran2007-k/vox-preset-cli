@@ -1,5 +1,7 @@
 # vox-preset-cli
 
+![The optional GUI's Current Rig and Live Pedal sections -- a preset dropdown, a live Volume knob, and one colored stompbox card per hardware slot (Pedal 1, Pedal 2, Reverb)](docs/gui-screenshot.png)
+
 A standalone Node.js CLI that writes (and reads) VOX VT20X/40X/100X amp
 presets directly over MIDI, from a JSON file. No browser, no WebMIDI, no
 live-editing dance -- it uses the amp's "Write User Program" + "Persist User
@@ -106,6 +108,13 @@ don't take either the owner's or Claude's word for it.
 
 ## Setup
 
+Works on **Windows, macOS, and Linux** -- it's plain Node.js, and
+[`@julusian/midi`](https://github.com/Julusian/node-midi) (the only native
+dependency) ships prebuilt binaries for all three (`win32-x64`,
+`win32-ia32`, `win32-arm64`, `darwin-x64`, `darwin-arm64`, `linux-x64`,
+`linux-arm64`, `linux-arm`, plus a musl build for Alpine), so `npm install`
+doesn't need a C++ build toolchain on any of them.
+
 ```bash
 cd vox-preset-cli
 npm install
@@ -120,24 +129,36 @@ VOX Tone Room, etc. -- only one client can talk to the amp at a time).
 If you'd rather click than type, there's a small local web GUI:
 
 ```bash
-./run-gui
+./run-gui       # macOS / Linux
+node run-gui     # Windows (or anywhere -- run-gui is plain Node, no bash)
 # or: npm run gui
 ```
 
-`./run-gui` starts the server and opens it in your default browser
-automatically (real browser, real tab -- it uses macOS's `open` command).
-`npm run gui` just starts the server without opening anything, if you'd
-rather control that yourself.
+`run-gui` starts the server and opens it in your default browser
+automatically (real browser, real tab -- `open` on macOS, `start` on
+Windows, `xdg-open` on Linux). `npm run gui` just starts the server without
+opening anything, if you'd rather control that yourself -- same on every
+platform, since it's a plain `node gui/server.js` under the hood.
 
 Either way it prints the URL (`http://localhost:4242` by default). It has
-three parts:
+four parts:
 
-- **Current Rig** -- pick a preset from the dropdown and hit Play Now to
-  hear it instantly (nothing saved, see "play" below). Also has a Volume
-  slider that sets the amp's live Volume directly, on its own, without
-  loading a whole preset -- drag and release to apply.
+- **Current Rig** -- pick a preset from the dropdown and it plays live
+  immediately (nothing saved, see "play" below; no separate "Play Now"
+  button to press). On load it also reads the amp's actual current state
+  and shows what it's already playing, if anything recognizable. A Volume
+  knob (and a plain slider next to it, for an easier grab) sets the amp's
+  live Volume directly, on its own, without loading a whole preset -- drag
+  and release, or scroll over the knob, to apply.
+- **Live Pedal** -- one colored stompbox card per hardware slot (Pedal 1,
+  Pedal 2, Reverb), each with a type dropdown, real knobs for every
+  parameter, and a footswitch -- turn a knob, flip a switch, or change a
+  type, and it updates the amp immediately, the same as its own knobs. The
+  card's color follows whichever effect kind (compressor/drive/modulation/
+  delay/reverb) the selected type counts as.
 - **Presets** -- Preview inspects a preset's decoded values with zero MIDI;
-  Write to Amp is permanent, with a confirm prompt.
+  Write to Amp is permanent (with a confirm prompt), and also applies the
+  preset live so what you hear matches what just got saved.
 - **Dump** -- pulls a slot's sound off the amp as a new preset file.
 
 The Current Rig dropdown is a small custom component (not a native
@@ -145,13 +166,16 @@ The Current Rig dropdown is a small custom component (not a native
 preset's amp/pedal/reverb summary inline so you don't have to open
 something else to remember what's in it.
 
-It's a preset launcher, not a knob editor -- there are no sliders/dials
-here. For live knob-by-knob tweaking, use vox-amp-librarian's browser app;
-this GUI is for managing/sharing/applying whole presets as files. All the
-actual MIDI I/O happens in the Node process (same `lib/protocol.js` and
-`lib/midi.js` the CLI uses) -- the browser page itself never touches MIDI,
-so there's no WebMIDI permission prompt and nothing extra to trust in the
-frontend beyond what's already in this repo.
+Live Pedal covers real-time knob-by-knob control for Pedal 1, Pedal 2, and
+Reverb, plus Volume for the amp -- but not the amp's own EQ knobs
+(gain/treble/middle/bass/presence/resonance) individually; those are still
+preset-file-only here. For full knob-by-knob amp editing, vox-amp-librarian's
+browser app remains the more complete live editor; this GUI's focus stays on
+managing/sharing/applying whole presets as files. All the actual MIDI I/O
+happens in the Node process (same `lib/protocol.js` and `lib/midi.js` the
+CLI uses) -- the browser page itself never touches MIDI, so there's no
+WebMIDI permission prompt and nothing extra to trust in the frontend beyond
+what's already in this repo.
 
 ## Usage
 

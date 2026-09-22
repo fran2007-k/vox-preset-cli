@@ -1,10 +1,71 @@
-#!/usr/bin/env bash
-set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")"
+#!/usr/bin/env node
+'use strict';
 
-PORT="${PORT:-4242}"
+/**
+ * Cross-platform launcher: starts the GUI server and opens it in a browser.
+ * Pure Node (no bash) so the exact same file works via `./run-gui` on
+ * macOS/Linux (the shebang above) and `node run-gui` on Windows (which
+ * doesn't understand shebangs or execute bits at all).
+ */
 
-echo "Starting VOX Preset Launcher on http://localhost:${PORT} ..."
-( sleep 1 && open "http://localhost:${PORT}" >/dev/null 2>&1 || true ) &
+const { spawn } = require('child_process');
+const path = require('path');
 
-exec node gui/server.js
+const PORT = process.env.PORT || 4242;
+const url = `http://localhost:${PORT}`;
+
+console.log(`Starting VOX Preset Launcher on ${url} ...`);
+
+function openInDefaultBrowser() {
+  const fallback = spawn('open', [url], { stdio: 'ignore' });
+  fallback.on('error', () => {});
+}
+
+function openBrowser() {
+  if (process.platform === 'darwin') {
+    // Prefer the installed "VOX Preset Launcher" webapp (a chromeless,
+    // app-like window -- created via a browser's "Add to Dock"/"Install as
+    // app" feature), if one's installed. Resolved by exact path via
+    // `mdfind`, NOT `open -a "VOX Preset Launcher"` by name -- that name
+    // lookup turned out to be unreliable for Safari-created webapps
+    // specifically (their bundle ID is an auto-generated
+    // com.apple.Safari.WebApp.<uuid>, not something distinctive), and on
+    // at least one real machine it resolved to completely the wrong app
+    // (Apple TV). A resolved filesystem path is unambiguous.
+    const finder = spawn('mdfind', ["kMDItemDisplayName == 'VOX Preset Launcher'"]);
+    let output = '';
+    finder.stdout.on('data', (chunk) => { output += chunk; });
+    finder.on('error', openInDefaultBrowser);
+    finder.on('close', () => {
+      const appPath = output.split('\n').find((line) => line.trim().length > 0);
+      if (!appPath) {
+        openInDefaultBrowser();
+        return;
+      }
+      const preferred = spawn('open', ['-a', appPath.trim(), url], { stdio: 'ignore' });
+      preferred.on('error', openInDefaultBrowser);
+      preferred.on('exit', (code) => {
+        if (code !== 0) openInDefaultBrowser();
+      });
+    });
+  } else if (process.platform === 'win32') {
+    // `start` is a cmd.exe builtin, not its own executable -- needs
+    // "cmd /c start". The empty "" is start's own window-title argument;
+    // without it, a URL is liable to be misread as that title instead.
+    const child = spawn('cmd', ['/c', 'start', '""', url], { stdio: 'ignore', detached: true, windowsHide: true });
+    child.on('error', () => {});
+    child.unref();
+  } else {
+    const child = spawn('xdg-open', [url], { stdio: 'ignore', detached: true });
+    child.on('error', () => {});
+    child.unref();
+  }
+}
+
+setTimeout(openBrowser, 1000);
+
+const server = spawn(process.execPath, [path.join(__dirname, 'gui', 'server.js')], {
+  stdio: 'inherit',
+  env: process.env,
+});
+server.on('exit', (code) => process.exit(code === null ? 1 : code));
