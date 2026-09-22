@@ -9,6 +9,14 @@
   --accent-hover: #d96339;
   --ok: #5aa469;
   --err: #c1502e;
+
+  /* Per-kind colors for Live Pedal cards, matching the ModularModeling
+     project's stompbox convention so the two apps read as one family. */
+  --kind-compressor: #4d7ea8;
+  --kind-drive: #b8433a;
+  --kind-modulation: #8a63b8;
+  --kind-delay: #4a9078;
+  --kind-reverb: #c99a42;
 }
 
 * { box-sizing: border-box; }
@@ -32,6 +40,7 @@ header {
 
 h1 { font-size: 1.25rem; margin: 0; letter-spacing: 0.02em; }
 h2 { font-size: 1rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 0.75rem; }
+.live-pedal-heading { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 1.5rem 0 0.5rem; }
 
 main { max-width: 860px; margin: 0 auto; padding: 1.5rem; }
 section { margin-bottom: 2.5rem; }
@@ -193,9 +202,11 @@ select, input[type="text"] {
 
 .knob-svg { width: 100%; height: 100%; transform: rotate(0deg); }
 .knob-track { fill: none; stroke: var(--border); stroke-width: 8; stroke-linecap: round; }
-.knob-fill { fill: none; stroke: var(--accent); stroke-width: 8; stroke-linecap: round; }
+/* --tile-accent is set by an enclosing .stompbox (per pedal kind); the
+   standalone Volume knob isn't inside one, so it falls back to --accent. */
+.knob-fill { fill: none; stroke: var(--tile-accent, var(--accent)); stroke-width: 8; stroke-linecap: round; }
 .knob-body { fill: var(--bg); stroke: var(--border); stroke-width: 1; }
-.knob-pointer { stroke: var(--accent); stroke-width: 3; stroke-linecap: round; transform-origin: 60px 60px; }
+.knob-pointer { stroke: var(--tile-accent, var(--accent)); stroke-width: 3; stroke-linecap: round; transform-origin: 60px 60px; }
 
 .knob-value {
   position: absolute;
@@ -228,6 +239,113 @@ select, input[type="text"] {
 .volume-slider:hover, .volume-slider:focus-visible { opacity: 1; }
 
 .hint-spaced { margin-top: 0.75rem; }
+
+/* ---- Live Pedal cards: one stompbox per hardware slot (Pedal 1, Pedal 2,
+   Reverb), colored by the currently-selected type's kind. Structure and
+   naming follow the ModularModeling project's stompbox convention. ---- */
+
+.live-pedal-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.stompbox {
+  --tile-accent: var(--kind-compressor);
+  width: 13rem;
+  background: var(--panel);
+  border: 2px solid var(--tile-accent);
+  border-radius: 14px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  box-shadow: 0 3px 0 0 color-mix(in srgb, var(--tile-accent) 55%, black);
+}
+.stompbox-compressor { --tile-accent: var(--kind-compressor); }
+.stompbox-drive { --tile-accent: var(--kind-drive); }
+.stompbox-modulation { --tile-accent: var(--kind-modulation); }
+.stompbox-delay { --tile-accent: var(--kind-delay); }
+.stompbox-reverb { --tile-accent: var(--kind-reverb); }
+
+.stompbox-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
+.stompbox-title { font-weight: 700; font-size: 0.95rem; letter-spacing: 0.02em; color: var(--tile-accent); }
+.stompbox-kind { font-size: 0.65rem; letter-spacing: 0.08em; color: var(--muted); text-transform: uppercase; }
+
+.stompbox .control { display: flex; flex-direction: column; gap: 0.25rem; }
+.stompbox .control-label { font-size: 0.7rem; color: var(--muted); }
+
+.stompbox select {
+  width: 100%;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.3rem 0.4rem;
+  font-size: 0.8rem;
+}
+
+.stompbox .panel-knobs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  justify-content: center;
+}
+.stompbox .panel-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: center;
+}
+.stompbox .control-toggle {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  padding: 0.2rem 0.5rem;
+  font-size: 0.7rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.stompbox .control-toggle.on {
+  color: var(--tile-accent);
+  border-color: var(--tile-accent);
+}
+
+/* Smaller variant of the Volume knob's SVG geometry -- same viewBox/radius,
+   just displayed at pedal-card scale. */
+.knob-sm { width: 56px; height: 56px; }
+.knob-sm .knob-value { font-size: 0.65rem; padding-top: 10px; }
+.knob-label-sm { font-size: 0.62rem; }
+
+.stompbox-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--border);
+}
+.stompbox-slot-label { font-size: 0.7rem; letter-spacing: 0.06em; color: var(--muted); }
+.stompbox-footswitch {
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--bg);
+  padding: 0;
+  cursor: pointer;
+}
+.stompbox-footswitch.on {
+  background: var(--tile-accent);
+  border-color: var(--tile-accent);
+  box-shadow: 0 0 8px 1px color-mix(in srgb, var(--tile-accent) 70%, transparent);
+}
+/* Specificity note: the generic `button:hover` rule above (0,1,1) would
+   otherwise beat .stompbox-footswitch's own background (0,1,0) and paint an
+   OFF footswitch --accent-hover on hover, which reads as falsely "on" next
+   to the real per-kind on-color. Only touch border-color here (not
+   background) so this can't fight with .on's own background either way. */
+.stompbox-footswitch:hover { border-color: var(--tile-accent); }
 
 .log {
   background: #0d0b09;

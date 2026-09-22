@@ -144,6 +144,26 @@ function setRigStatus(text, kind) {
   rigStatusEl.className = 'rig-status' + (kind ? ' ' + kind : '');
 }
 
+// Shared by playSelectedRig and onWriteClick -- both apply a preset live
+// (play only lives, write persists AND lives) and get back the same
+// {volume, pedal1, pedal2, reverb, failed} shape to resync the UI from.
+function syncKnobAndPedalsFromResult(result) {
+  // Volume's knob/slider specifically, unless the amp didn't accept that
+  // one field live (rare, but don't lie about it if so).
+  const volumeApplied = !result.failed || !result.failed.includes('amplifier.volume');
+  if (volumeApplied && typeof result.volume === 'number') {
+    knobValue = clampKnobValue(result.volume);
+    renderKnob(knobValue);
+  }
+
+  livePedalState = {
+    pedal1: { ...result.pedal1, params: result.pedal1.params || {} },
+    pedal2: { ...result.pedal2, params: result.pedal2.params || {} },
+    reverb: { ...result.reverb, params: result.reverb.params || {} },
+  };
+  renderLivePedalRow();
+}
+
 // Selecting a preset from the dropdown IS the action -- no separate "Play
 // Now" button. Current Rig always reflects what's actually sounding on the
 // amp right now, not just a pending choice.
@@ -163,14 +183,7 @@ async function playSelectedRig() {
     const data = await res.json();
     if (!data.ok) throw new Error(data.error);
 
-    // Playing a preset changes the amp's actual Volume too -- keep the
-    // knob/slider in sync with reality, unless that specific field was
-    // one the amp didn't accept (rare, but don't lie about it if so).
-    const volumeApplied = !data.result.failed || !data.result.failed.includes('amplifier.volume');
-    if (volumeApplied && typeof data.result.volume === 'number') {
-      knobValue = clampKnobValue(data.result.volume);
-      renderKnob(knobValue);
-    }
+    syncKnobAndPedalsFromResult(data.result);
 
     if (data.result.failed && data.result.failed.length > 0) {
       setRigStatus(`Now playing: "${data.result.programName}" -- ${data.result.failed.length} field(s) the amp didn't accept live (known hardware limitation): ${data.result.failed.join(', ')}`, 'ok');
@@ -310,6 +323,300 @@ volumeSlider.addEventListener('change', () => {
   commitVolume(knobValue);
 });
 
+// --- Live Pedal cards (Pedal 1 / Pedal 2 / Reverb) -------------------------
+// One stompbox per fixed hardware slot -- no add/remove/reorder, unlike a
+// freeform pedalboard -- colored by whichever effect "kind" the currently
+// selected type counts as. Structure/coloring convention matches the
+// ModularModeling project's stompbox cards.
+
+const livePedalRow = document.getElementById('live-pedal-row');
+let pedalSchema = null;
+
+async function fetchPedalSchema() {
+  try {
+    const res = await fetch('/api/pedal-schema');
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    pedalSchema = data.result;
+  } catch (err) {
+    log(`Couldn't load the pedal schema -- Live Pedal cards won't work: ${err.message}`, 'err');
+  }
+}
+
+const SLOT_LABEL = { pedal1: 'PEDAL 1', pedal2: 'PEDAL 2', reverb: 'REVERB' };
+
+function kindClassFor(slot, type) {
+  const info = pedalSchema[slot].types.find((t) => t.type === type);
+  return info ? info.kind : 'compressor';
+}
+
+function paramsSpecFor(slot, type) {
+  return slot === 'reverb' ? pedalSchema.reverb.params.ALL : pedalSchema[slot].params[type];
+}
+
+function decimalsForKind(kind) {
+  if (kind === 'unitless') return 1;
+  if (kind === 'frequency') return 2;
+  return 0; // duration / durationByte -- these are whole milliseconds
+}
+
+/**
+ * One knob instance. Generalizes the Volume knob's exact interaction model
+ * above (drag vertically / scroll / arrow keys, commit on release, debounced
+ * commit on scroll) to an arbitrary min/max/decimals/label/onCommit, so
+ * every pedal param can get its own knob without duplicating that logic.
+ */
+function createKnobControl({ min, max, decimals, label, value, onCommit }) {
+  const wrap = document.createElement('div');
+  wrap.className = 'knob-container';
+  wrap.innerHTML = `
+    <div class="knob knob-sm" tabindex="0" role="slider" aria-label="${label}" aria-valuemin="${min}" aria-valuemax="${max}">
+      <svg viewBox="0 0 120 120" class="knob-svg">
+        <path class="knob-track"></path>
+        <path class="knob-fill"></path>
+        <circle cx="60" cy="60" r="46" class="knob-body"></circle>
+        <line class="knob-pointer" x1="60" y1="60" x2="60" y2="30"></line>
+      </svg>
+      <div class="knob-value"></div>
+    </div>
+    <div class="knob-label knob-label-sm">${label}</div>
+  `;
+  const knobEl = wrap.querySelector('.knob');
+  const track = wrap.querySelector('.knob-track');
+  const fill = wrap.querySelector('.knob-fill');
+  const pointer = wrap.querySelector('.knob-pointer');
+  const valueEl = wrap.querySelector('.knob-value');
+  track.setAttribute('d', describeArc(60, 60, KNOB_RADIUS, KNOB_MIN_ANGLE, KNOB_MAX_ANGLE));
+
+  const step = (max - min) / 100;
+  let current = value;
+
+  function angleFor(v) {
+    return KNOB_MIN_ANGLE + ((v - min) / (max - min)) * (KNOB_MAX_ANGLE - KNOB_MIN_ANGLE);
+  }
+  function clamp(v) {
+    return Math.round(Math.max(min, Math.min(max, v)) / step) * step;
+  }
+  function render(v) {
+    current = v;
+    const angle = angleFor(v);
+    fill.setAttribute('d', describeArc(60, 60, KNOB_RADIUS, KNOB_MIN_ANGLE, angle));
+    pointer.style.transform = `rotate(${angle}deg)`;
+    valueEl.textContent = v.toFixed(decimals);
+    knobEl.setAttribute('aria-valuenow', v.toFixed(decimals));
+  }
+  render(current);
+
+  let dragStartY = null;
+  let dragStartValue = current;
+  knobEl.addEventListener('pointerdown', (event) => {
+    dragStartY = event.clientY;
+    dragStartValue = current;
+    knobEl.setPointerCapture(event.pointerId);
+    knobEl.focus();
+  });
+  knobEl.addEventListener('pointermove', (event) => {
+    if (dragStartY === null) return;
+    const deltaPx = dragStartY - event.clientY;
+    render(clamp(dragStartValue + (deltaPx / KNOB_DRAG_RANGE_PX) * (max - min)));
+  });
+  function endDrag() {
+    if (dragStartY === null) return;
+    dragStartY = null;
+    onCommit(current);
+  }
+  knobEl.addEventListener('pointerup', endDrag);
+  knobEl.addEventListener('pointercancel', endDrag);
+
+  let wheelTimer = null;
+  knobEl.addEventListener('wheel', (event) => {
+    event.preventDefault();
+    render(clamp(current + (event.deltaY < 0 ? step : -step)));
+    clearTimeout(wheelTimer);
+    wheelTimer = setTimeout(() => onCommit(current), 300);
+  }, { passive: false });
+
+  knobEl.addEventListener('keydown', (event) => {
+    let delta = 0;
+    if (event.key === 'ArrowUp' || event.key === 'ArrowRight') delta = step;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowLeft') delta = -step;
+    if (delta === 0) return;
+    event.preventDefault();
+    render(clamp(current + delta));
+    onCommit(current);
+  });
+
+  return wrap;
+}
+
+/** Builds one stompbox card for a slot ('pedal1'|'pedal2'|'reverb') from its current live state ({type, enabled, params}). */
+function buildPedalCard(slot, state) {
+  const spec = paramsSpecFor(slot, state.type);
+  const kind = kindClassFor(slot, state.type);
+  const values = { ...Object.fromEntries(Object.entries(spec).map(([k, s]) => [k, s.default])), ...(state.params || {}) };
+
+  const card = document.createElement('div');
+  card.className = `stompbox stompbox-${kind}`;
+
+  const header = document.createElement('div');
+  header.className = 'stompbox-header';
+  header.innerHTML = `
+    <div>
+      <div class="stompbox-title">${state.type}</div>
+      <div class="stompbox-kind">${SLOT_LABEL[slot]}</div>
+    </div>
+  `;
+  card.appendChild(header);
+
+  const typeLabel = document.createElement('label');
+  typeLabel.className = 'control control-select';
+  const types = pedalSchema[slot].types;
+  typeLabel.innerHTML = `<span class="control-label">Type</span>
+    <select>${types.map((t) => `<option value="${t.type}" ${t.type === state.type ? 'selected' : ''}>${t.type}</option>`).join('')}</select>`;
+  typeLabel.querySelector('select').addEventListener('change', (event) => onPedalTypeChange(slot, event.target.value));
+  card.appendChild(typeLabel);
+
+  const knobsWrap = document.createElement('div');
+  knobsWrap.className = 'panel-knobs';
+  const togglesWrap = document.createElement('div');
+  togglesWrap.className = 'panel-toggles';
+  let hasToggles = false;
+
+  for (const [name, paramSpec] of Object.entries(spec)) {
+    const value = values[name];
+    if (paramSpec.kind === 'boolean') {
+      hasToggles = true;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'control-toggle' + (value ? ' on' : '');
+      btn.textContent = `${name.toUpperCase()}: ${value ? 'ON' : 'OFF'}`;
+      btn.addEventListener('click', () => onPedalParamCommit(slot, state.type, name, !value));
+      togglesWrap.appendChild(btn);
+    } else if (paramSpec.kind === 'discrete') {
+      hasToggles = true;
+      const sel = document.createElement('select');
+      sel.style.width = 'auto';
+      for (const choice of Object.keys(paramSpec.choices)) {
+        const opt = document.createElement('option');
+        opt.value = choice;
+        opt.textContent = choice;
+        if (choice === value) opt.selected = true;
+        sel.appendChild(opt);
+      }
+      sel.addEventListener('change', () => onPedalParamCommit(slot, state.type, name, sel.value));
+      togglesWrap.appendChild(sel);
+    } else {
+      const knob = createKnobControl({
+        min: paramSpec.min ?? 0,
+        max: paramSpec.max ?? 10,
+        decimals: decimalsForKind(paramSpec.kind),
+        label: name.toUpperCase(),
+        value: typeof value === 'number' ? value : paramSpec.default,
+        onCommit: (v) => onPedalParamCommit(slot, state.type, name, v),
+      });
+      knobsWrap.appendChild(knob);
+    }
+  }
+
+  card.appendChild(knobsWrap);
+  if (hasToggles) card.appendChild(togglesWrap);
+
+  const footer = document.createElement('div');
+  footer.className = 'stompbox-footer';
+  footer.innerHTML = `<span class="stompbox-slot-label">${SLOT_LABEL[slot]}</span>`;
+  const footswitch = document.createElement('button');
+  footswitch.type = 'button';
+  footswitch.className = 'stompbox-footswitch' + (state.enabled ? ' on' : '');
+  footswitch.addEventListener('click', () => onPedalEnabledToggle(slot, footswitch, !state.enabled));
+  footer.appendChild(footswitch);
+  card.appendChild(footer);
+
+  return card;
+}
+
+let livePedalState = {
+  pedal1: { type: 'COMP', enabled: false, params: {} },
+  pedal2: { type: 'FLANGER', enabled: false, params: {} },
+  reverb: { type: 'ROOM', enabled: false, params: {} },
+};
+
+function renderLivePedalRow() {
+  if (!pedalSchema) return;
+  livePedalRow.innerHTML = '';
+  for (const slot of ['pedal1', 'pedal2', 'reverb']) {
+    livePedalRow.appendChild(buildPedalCard(slot, livePedalState[slot]));
+  }
+}
+
+async function onPedalParamCommit(slot, type, param, value) {
+  try {
+    const res = await fetch('/api/pedal-param', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slot, type, param, value }),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    if (!livePedalState[slot].params) livePedalState[slot].params = {};
+    livePedalState[slot].params[param] = value;
+    log(`Live ${SLOT_LABEL[slot]} ${param} set to ${value}.`, 'ok');
+  } catch (err) {
+    log(`Failed to set ${SLOT_LABEL[slot]} ${param}: ${err.message}`, 'err');
+  }
+}
+
+async function onPedalEnabledToggle(slot, btn, enabled) {
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/pedal-enabled', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slot, enabled }),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    livePedalState[slot].enabled = enabled;
+    btn.classList.toggle('on', enabled);
+    log(`${SLOT_LABEL[slot]} ${enabled ? 'enabled' : 'disabled'} live.`, 'ok');
+  } catch (err) {
+    log(`Failed to toggle ${SLOT_LABEL[slot]}: ${err.message}`, 'err');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// Switching a type resets that slot's params to the new type's defaults
+// (both on the amp -- doSetPedalType does this server-side -- and in the
+// card, which re-renders from those same schema defaults) since the old
+// type's raw dial values don't mean anything for the new type.
+async function onPedalTypeChange(slot, type) {
+  log(`Switching ${SLOT_LABEL[slot]} to ${type} live...`);
+  try {
+    const res = await fetch('/api/pedal-type', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slot, type }),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    livePedalState[slot] = { type, enabled: livePedalState[slot].enabled, params: {} };
+    renderLivePedalRow();
+    if (data.result.failed && data.result.failed.length > 0) {
+      log(`${SLOT_LABEL[slot]} switched to ${type}, with ${data.result.failed.length} field(s) the amp didn't accept live (known hardware limitation): ${data.result.failed.join(', ')}`, 'ok');
+    } else {
+      log(`${SLOT_LABEL[slot]} switched to ${type} live, params reset to defaults.`, 'ok');
+    }
+  } catch (err) {
+    // The <select> itself already shows the user's failed pick (that's the
+    // browser's own native behavior, not something we set) -- but nothing
+    // underneath actually changed, so leaving it there would show FUZZ's
+    // label over COMP's still-live knobs. Re-render from the untouched
+    // state to put the dropdown back in sync with reality.
+    renderLivePedalRow();
+    log(`Failed to switch ${SLOT_LABEL[slot]} to ${type}: ${err.message}`, 'err');
+  }
+}
+
 function renderPresetsList(presets) {
   if (presets.length === 0) {
     presetsList.innerHTML = '<p class="hint">No preset files in presets/ yet.</p>';
@@ -411,7 +718,17 @@ async function onWriteClick(event) {
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error);
-    log(`Done: "${data.result.programName}" written to ${data.result.slot}.`, 'ok');
+
+    syncKnobAndPedalsFromResult(data.result);
+    selectedRigFile = file;
+    updateRigTriggerLabel(loadedPresets.filter((p) => !p.error));
+    setRigStatus(`Now playing: "${data.result.programName}" (just written to ${data.result.slot})`, 'ok');
+
+    if (data.result.failed && data.result.failed.length > 0) {
+      log(`Done: "${data.result.programName}" written to ${data.result.slot} and applied live, with ${data.result.failed.length} field(s) the amp didn't accept live (known hardware limitation): ${data.result.failed.join(', ')}`, 'ok');
+    } else {
+      log(`Done: "${data.result.programName}" written to ${data.result.slot} and applied live.`, 'ok');
+    }
   } catch (err) {
     log(`Failed: ${err.message}`, 'err');
   } finally {
@@ -466,15 +783,25 @@ async function initCurrentRigFromAmp() {
     knobValue = clampKnobValue(result.volume);
     renderKnob(knobValue);
 
+    // Live Pedal cards always reflect the amp's real current state,
+    // matched-to-a-preset or not.
+    livePedalState = { pedal1: result.pedal1, pedal2: result.pedal2, reverb: result.reverb };
+    renderLivePedalRow();
+
     if (result.matched) {
       selectedRigFile = result.file;
       updateRigTriggerLabel(loadedPresets.filter((p) => !p.error));
       setRigStatus(`Now playing: "${result.programName}" (detected from the amp)`, 'ok');
       log(`Current Rig synced: the amp is currently sounding like "${result.programName}".`, 'ok');
     } else {
-      const parts = [result.amplifier, result.pedal1, result.pedal2, result.reverb].filter(Boolean).join(' · ');
+      const parts = [
+        result.amplifier,
+        result.pedal1.enabled ? result.pedal1.type : null,
+        result.pedal2.enabled ? result.pedal2.type : null,
+        result.reverb.enabled ? result.reverb.type : null,
+      ].filter(Boolean).join(' · ');
       setRigStatus(`On the amp right now: ${parts || '(unknown)'} -- doesn't match any saved preset.`);
-      log("Current Rig synced: the amp's sound doesn't match any saved preset (Volume knob still synced).");
+      log("Current Rig synced: the amp's sound doesn't match any saved preset (Volume knob and Live Pedal cards still synced).");
     }
   } catch (err) {
     // Amp not connected (or some other read failure) is a completely
@@ -486,7 +813,8 @@ async function initCurrentRigFromAmp() {
 
 refreshStatus();
 (async () => {
-  await loadPresets();
+  await Promise.all([loadPresets(), fetchPedalSchema()]);
+  renderLivePedalRow(); // defaults, in case the amp read below fails
   await initCurrentRigFromAmp();
 })();
 log('GUI loaded. Only one client (this GUI, the CLI, or the browser librarian) can hold the MIDI connection at a time.');

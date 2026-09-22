@@ -70,6 +70,42 @@ function doPreview(fileName) {
   return protocol.decodeProgram(programBytes);
 }
 
+// Shared by doPlay and doWrite (both apply a preset live and report what a
+// caller needs to re-sync Volume + the Live Pedal cards without a separate
+// amp round-trip). Fallback defaults match buildLiveApplyMessages's own,
+// for a slot the preset leaves out entirely.
+function presetLiveSummary(preset) {
+  return {
+    volume: { ...protocol.AMP_DEFAULTS, ...(preset.amplifier || {}) }.volume,
+    pedal1: preset.pedal1 || { type: 'COMP', enabled: false },
+    pedal2: preset.pedal2 || { type: 'FLANGER', enabled: false },
+    reverb: preset.reverb || { type: 'ROOM', enabled: false },
+  };
+}
+
+/** Sends each live message, tolerating the handful of fields known not to accept live updates at all (see README). Returns their labels. */
+async function applyLiveMessages(ports, messages) {
+  const failed = [];
+  for (const { label, message } of messages) {
+    try {
+      await sendAndAwaitAck(ports, message, protocol.isAck, 800);
+    } catch (err) {
+      failed.push(label);
+    }
+  }
+  return failed;
+}
+
+/**
+ * Persists the preset into a slot AND makes the amp sound like it right
+ * now, via the same live "dial turned" messages doPlay uses -- otherwise
+ * writing would only ever touch a slot's stored memory, never the amp's
+ * actual active buffer, and the Live Pedal cards / Current Rig would have
+ * nothing real to sync themselves from afterward. In practice this is
+ * usually a no-op sound-wise (the established workflow is play-then-write,
+ * so the amp's already sounding like this), but it also covers writing a
+ * preset that was never auditioned first, or dumped from elsewhere.
+ */
 async function doWrite(fileName, slotOverride) {
   const filePath = path.join(PRESETS_DIR, fileName);
   if (!filePath.startsWith(PRESETS_DIR)) throw new Error('invalid file');
@@ -80,16 +116,19 @@ async function doWrite(fileName, slotOverride) {
   const programBytes = protocol.encodeProgram(preset);
   const writeMessage = protocol.buildWriteUserProgramMessage(slot, programBytes);
   const persistMessage = protocol.buildPersistUserProgramMessage(slot);
+  const liveMessages = protocol.buildLiveApplyMessages(preset);
 
   const ports = openAmpPorts();
+  let failed;
   try {
     await sendAndAwaitAck(ports, writeMessage, protocol.isAck);
     await sendAndAwaitAck(ports, persistMessage, protocol.isAck);
+    failed = await applyLiveMessages(ports, liveMessages);
   } finally {
     ports.close();
   }
 
-  return { slot, programName: preset.programName || '(unnamed)' };
+  return { slot, programName: preset.programName || '(unnamed)', failed, ...presetLiveSummary(preset) };
 }
 
 /**
@@ -105,22 +144,14 @@ async function doPlay(fileName) {
   const messages = protocol.buildLiveApplyMessages(preset);
 
   const ports = openAmpPorts();
-  const failed = [];
+  let failed;
   try {
-    for (const { label, message } of messages) {
-      try {
-        await sendAndAwaitAck(ports, message, protocol.isAck, 800);
-      } catch (err) {
-        failed.push(label);
-      }
-    }
+    failed = await applyLiveMessages(ports, messages);
   } finally {
     ports.close();
   }
 
-  const effectiveVolume = { ...protocol.AMP_DEFAULTS, ...(preset.amplifier || {}) }.volume;
-
-  return { programName: preset.programName || '(unnamed)', messageCount: messages.length, failed, volume: effectiveVolume };
+  return { programName: preset.programName || '(unnamed)', messageCount: messages.length, failed, ...presetLiveSummary(preset) };
 }
 
 /**
@@ -137,6 +168,101 @@ async function doSetAmpDial(key, value) {
     ports.close();
   }
   return { key, value };
+}
+
+// Which "kind" each pedal1/pedal2 type counts as for the Live Pedal cards'
+// per-kind coloring (COMPRESSOR / DRIVE / MODULATION / DELAY / REVERB --
+// same convention as the ModularModeling project's stompbox cards). Reverb
+// only ever has one kind; pedal1/pedal2 vary by which type is selected.
+const PEDAL1_KIND_BY_TYPE = {
+  COMP: 'compressor',
+  CHORUS: 'modulation',
+  OVERDRIVE: 'drive', GOLD_DRIVE: 'drive', TREBLE_BOOST: 'drive', RC_TURBO: 'drive',
+  ORANGE_DIST: 'drive', FAT_DIST: 'drive', BRIT_LEAD: 'drive', FUZZ: 'drive',
+};
+const PEDAL2_KIND_BY_TYPE = {
+  FLANGER: 'modulation', BLK_PHASER: 'modulation', ORG_PHASER_1: 'modulation',
+  ORG_PHASER_2: 'modulation', TREMOLO: 'modulation',
+  TAPE_ECHO: 'delay', ANALOG_DELAY: 'delay',
+};
+
+/**
+ * Static metadata the Live Pedal cards need to render themselves generically
+ * (type choices, per-type param specs with kind/default/min/max/choices, and
+ * a UI "kind" for coloring) instead of duplicating protocol.js's tables in
+ * the frontend. Doesn't touch MIDI -- safe to call with the amp off.
+ */
+function getPedalSchema() {
+  return {
+    pedal1: {
+      types: Object.keys(protocol.PEDAL1_TYPES).map((type) => ({ type, kind: PEDAL1_KIND_BY_TYPE[type] })),
+      params: protocol.PEDAL1_PARAMS,
+    },
+    pedal2: {
+      types: Object.keys(protocol.PEDAL2_TYPES).map((type) => ({ type, kind: PEDAL2_KIND_BY_TYPE[type] })),
+      params: protocol.PEDAL2_PARAMS,
+    },
+    reverb: {
+      types: Object.keys(protocol.REVERB_TYPES).map((type) => ({ type, kind: 'reverb' })),
+      // Reverb's params are the same regardless of type, so it's keyed by
+      // "ALL" here rather than duplicated per type like pedal1/pedal2.
+      params: { ALL: protocol.REVERB_PARAMS },
+    },
+  };
+}
+
+/** Live-enables/disables one of pedal1/pedal2/reverb, right now, on whatever slot is currently active. */
+async function doSetPedalEnabled(slot, enabled) {
+  const message = protocol.buildPedalEnabledLiveMessage(slot, enabled);
+  const ports = openAmpPorts();
+  try {
+    await sendAndAwaitAck(ports, message, protocol.isAck, 800);
+  } finally {
+    ports.close();
+  }
+  return { slot, enabled };
+}
+
+/**
+ * Live-switches one of pedal1/pedal2/reverb to a new type, then resets that
+ * type's params to their documented defaults (so it starts from a
+ * known-good sound instead of inheriting the previous type's raw dial
+ * values, which mean something different -- or nothing -- for the new
+ * type). Per-field resilient like doPlay, since a couple of fields are
+ * known not to accept live updates at all (Phaser Depth, Delay modDepth).
+ */
+async function doSetPedalType(slot, type) {
+  const typeMessage = protocol.buildPedalTypeLiveMessage(slot, type);
+  const defaultMessages = protocol.buildPedalDefaultsLiveMessages(slot, type);
+
+  const ports = openAmpPorts();
+  const failed = [];
+  try {
+    await sendAndAwaitAck(ports, typeMessage, protocol.isAck, 800);
+    for (const { label, message } of defaultMessages) {
+      try {
+        await sendAndAwaitAck(ports, message, protocol.isAck, 800);
+      } catch (err) {
+        failed.push(label);
+      }
+    }
+  } finally {
+    ports.close();
+  }
+
+  return { slot, type, failed };
+}
+
+/** Live-sets one named param of one pedal/reverb slot's current type. */
+async function doSetPedalParam(slot, type, paramName, value) {
+  const message = protocol.buildPedalParamLiveMessage(slot, type, paramName, value);
+  const ports = openAmpPorts();
+  try {
+    await sendAndAwaitAck(ports, message, protocol.isAck, 800);
+  } finally {
+    ports.close();
+  }
+  return { slot, type, param: paramName, value };
 }
 
 // A handful of fields are known (see README's "play vs write" section) to
@@ -216,6 +342,7 @@ async function doGetCurrentRig() {
     ports.close();
   }
 
+  let match = { matched: false };
   for (const file of listPresetFiles()) {
     if (file.error) continue;
     let preset;
@@ -226,17 +353,22 @@ async function doGetCurrentRig() {
     }
     const normalized = protocol.decodeProgramToPresetInput(protocol.encodeProgram(preset));
     if (currentMatchesPreset(current, normalized)) {
-      return { matched: true, file: file.file, programName: preset.programName || '(unnamed)', volume: current.amplifier.volume };
+      match = { matched: true, file: file.file, programName: preset.programName || '(unnamed)' };
+      break;
     }
   }
 
+  // pedal1/pedal2/reverb are always included (not just on a miss) -- the
+  // Live Pedal cards need the amp's actual current type/enabled/params to
+  // initialize themselves from, whether or not the overall rig happens to
+  // match a saved preset file.
   return {
-    matched: false,
+    ...match,
     volume: current.amplifier.volume,
     amplifier: current.amplifier.model,
-    pedal1: current.pedal1.enabled ? current.pedal1.type : null,
-    pedal2: current.pedal2.enabled ? current.pedal2.type : null,
-    reverb: current.reverb.enabled ? current.reverb.type : null,
+    pedal1: current.pedal1,
+    pedal2: current.pedal2,
+    reverb: current.reverb,
   };
 }
 
@@ -308,6 +440,32 @@ async function handleApi(req, res) {
 
     if (req.method === 'GET' && req.url === '/api/current-rig') {
       const result = await doGetCurrentRig();
+      res.end(JSON.stringify({ ok: true, result }));
+      return;
+    }
+
+    if (req.method === 'GET' && req.url === '/api/pedal-schema') {
+      res.end(JSON.stringify({ ok: true, result: getPedalSchema() }));
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/api/pedal-enabled') {
+      const body = await readJsonBody(req);
+      const result = await doSetPedalEnabled(body.slot, body.enabled);
+      res.end(JSON.stringify({ ok: true, result }));
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/api/pedal-type') {
+      const body = await readJsonBody(req);
+      const result = await doSetPedalType(body.slot, body.type);
+      res.end(JSON.stringify({ ok: true, result }));
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/api/pedal-param') {
+      const body = await readJsonBody(req);
+      const result = await doSetPedalParam(body.slot, body.type, body.param, body.value);
       res.end(JSON.stringify({ ok: true, result }));
       return;
     }
